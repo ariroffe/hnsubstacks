@@ -13,6 +13,7 @@ Thumbs.db
 
 # Editor
 .vscode/
+.idea/
 
 # Local dev data
 frontend/src/data/stories.json
