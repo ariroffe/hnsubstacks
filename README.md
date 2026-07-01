@@ -16,6 +16,11 @@ cd frontend
 npm run dev
 ```
 
+To get the stories from HN (for now):
+```bash
+curl "https://hn.algolia.com/api/v1/search_by_date?tags=story&restrictSearchableAttributes=url&query=substack.com&numericFilters=created_at_i%3E$(date -d '7 days ago' +%s)"
+```
+
 ## Structure
 ```
 hnsubstacks/
