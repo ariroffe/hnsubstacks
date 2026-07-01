@@ -11,8 +11,8 @@
           <tbody>
             <tr>
               <td style="width:18px;padding-right:4px">
-                <a href="https://news.ycombinator.com">
-                  <img src="y18.svg" width="18" height="18" style="border:1px white solid; display:block">
+                <a href="https://hnsubstacks.com">
+                  <img src="/favicon.jpg" width="18" height="18" style="border:1px white solid; display:block">
                 </a>
               </td>
               <td style="line-height:12pt; height:10px;">
