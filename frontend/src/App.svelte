@@ -1,89 +1,71 @@
 <script>
-  import svelteLogo from './assets/svelte.svg'
-  import viteLogo from './assets/vite.svg'
-  import heroImg from './assets/hero.png'
-  import Counter from './lib/Counter.svelte'
+  import stories from './data/stories.json';
+  import HnItem from './lib/HnItem.svelte';
 </script>
 
-<section id="center">
-  <div class="hero">
-    <img src={heroImg} class="base" width="170" height="179" alt="" />
-    <img src={svelteLogo} class="framework" alt="Svelte logo" />
-    <img src={viteLogo} class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/App.svelte</code> and save to test <code>HMR</code></p>
-  </div>
-  <Counter />
-</section>
+<table id="hnmain" border="0" cellpadding="0" cellspacing="0" width="85%" bgcolor="#f6f6ef">
+  <tbody>
+    <tr>
+      <td bgcolor="#ff6600">
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="padding:2px">
+          <tbody>
+            <tr>
+              <td style="width:18px;padding-right:4px">
+                <a href="https://news.ycombinator.com">
+                  <img src="y18.svg" width="18" height="18" style="border:1px white solid; display:block">
+                </a>
+              </td>
+              <td style="line-height:12pt; height:10px;">
+                <span class="pagetop">
+                  <b class="hnname"><a href="/">hnsubstacks</a></b>
+                  <a href="/">top</a>
+                  |
+                  <a href="/new">new</a>
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+    </tr>
 
-<div class="ticks"></div>
+    <tr style="height:10px"></tr>
+    
+    <tr id="bigbox">
+      <td>
+        <table border="0" cellpadding="0" cellspacing="0">
+          <tbody>
+            {#each stories.hits as story, i}
+              <HnItem {story} rank={i+1} />
+            {/each}
 
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true">
-      <use href="/icons.svg#documentation-icon"></use>
-    </svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank" rel="noreferrer">
-          <img class="logo" src={viteLogo} alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://svelte.dev/" target="_blank" rel="noreferrer">
-          <img class="button-icon" src={svelteLogo} alt="" />
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true">
-      <use href="/icons.svg#social-icon"></use>
-    </svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li>
-        <a href="https://github.com/vitejs/vite" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#github-icon"></use>
-          </svg>
-          GitHub
-        </a>
-      </li>
-      <li>
-        <a href="https://chat.vite.dev/" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#discord-icon"></use>
-          </svg>
-          Discord
-        </a>
-      </li>
-      <li>
-        <a href="https://x.com/vite_js" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#x-icon"></use>
-          </svg>
-          X.com
-        </a>
-      </li>
-      <li>
-        <a href="https://bsky.app/profile/vite.dev" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#bluesky-icon"></use>
-          </svg>
-          Bluesky
-        </a>
-      </li>
-    </ul>
-  </div>
-</section>
+            <tr class="morespace" style="height:10px"></tr>
+            <tr>
+              <td colspan="2"></td>
+              <td class='title'><a href='?p=2' class='morelink' rel='next'>More</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+    </tr>
 
-<div class="ticks"></div>
-<section id="spacer"></section>
+    <tr>
+        <td><img src="https://news.ycombinator.com/s.gif" height="10" width="0">
+            <table width="100%" cellspacing="0" cellpadding="1">
+              <tbody>
+                <tr>
+                    <td bgcolor="#ff6600"></td>
+                </tr>
+              </tbody>
+            </table>
+            <br>
+            <center>
+              <span class="yclinks"><a href="/about/">About hnsubstacks</a> | <a href="#">Repo</a> | <a
+                  target="_blank" href="https://arielroffe.quest/">Author</a></span><br><br>
+                <form method="get" action="#">Request addition of domain: <input type="text" name="q" size="17"
+                  autocorrect="off" spellcheck="false" autocapitalize="off" autocomplete="off"></form>
+            </center>
+        </td>
+    </tr>
+  </tbody>
+</table>
