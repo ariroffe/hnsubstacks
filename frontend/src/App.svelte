@@ -1,6 +1,10 @@
 <script>
-  import stories from './data/stories.json';
+  import stories_top from './data/top.json';
+  import stories_new from './data/new.json';
   import HnItem from './lib/HnItem.svelte';
+
+  let sortBy = $state("top");
+  let stories = $derived(sortBy === "top" ? stories_top.hits : stories_new.hits);
 </script>
 
 <table id="hnmain" border="0" cellpadding="0" cellspacing="0" width="85%" bgcolor="#f6f6ef">
@@ -18,9 +22,9 @@
               <td style="line-height:12pt; height:10px;">
                 <span class="pagetop">
                   <b class="hnname"><a href="/">hnsubstacks</a></b>
-                  <a href="/">top</a>
+                  <button class={sortBy === "top" ? "active" : ""} on:click={() => sortBy = "top"}>top</button>
                   |
-                  <a href="/new">new</a>
+                  <button class={sortBy === "new" ? "active" : ""} href="/" on:click={() => sortBy = "new"}>new</button>
                 </span>
               </td>
             </tr>
@@ -35,7 +39,7 @@
       <td>
         <table border="0" cellpadding="0" cellspacing="0">
           <tbody>
-            {#each stories.hits as story, i}
+            {#each stories as story, i}
               <HnItem {story} rank={i+1} />
             {/each}
 
@@ -62,10 +66,24 @@
             <center>
               <span class="yclinks"><a href="/about/">About hnsubstacks</a> | <a href="#">Repo</a> | <a
                   target="_blank" href="https://arielroffe.quest/">Author</a></span><br><br>
-                <form method="get" action="#">Request addition of domain: <input type="text" name="q" size="17"
+                <form method="get" action="#">Request addition of a domain: <input type="text" name="q" size="17"
                   autocorrect="off" spellcheck="false" autocapitalize="off" autocomplete="off"></form>
             </center>
         </td>
     </tr>
   </tbody>
 </table>
+
+
+<style>
+  span.pagetop button {
+    outline: none;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+  span.pagetop button.active {
+    color: white;
+  }
+</style>
