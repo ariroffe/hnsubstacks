@@ -2,13 +2,63 @@
   import { fetchStories } from './lib/fetch_stories.js';
   import HnItem from './lib/HnItem.svelte';
 
-  let sortBy = $state("top");
+  const PAGE_SIZE = 30;
+  const DEFAULT_SORT = 'top';
+
+  let { sortBy, page } = $state(paramsFromUrl());
   let storiesPromise = $state(fetchStories(sortBy));
+  
+  function paramsFromUrl() {
+    const params = new URLSearchParams(location.search);
+    const sort = params.get('sort') === 'new' ? 'new' : DEFAULT_SORT;
+    const page = parseInt(params.get('p'), 10);
+    return { sortBy: sort, page: page && page > 0 ? page : 1 };
+  }
+
+  // Single entry point for any state change (sort click, pagination, popstate).
+  // Updates state, refetches if sort changed, syncs the URL, and scrolls to top.
+  function applyParams(newParams, { pushHistory = true, scroll = true } = {}) {
+    const sortChanged = newParams.sortBy !== undefined && newParams.sortBy !== sortBy;
+
+    if (newParams.sortBy !== undefined) sortBy = newParams.sortBy;
+    if (newParams.page !== undefined) page = newParams.page;
+
+    if (sortChanged) {
+      storiesPromise = fetchStories(sortBy);
+    }
+
+    if (pushHistory) {
+      const params = new URLSearchParams();
+      if (sortBy !== DEFAULT_SORT) params.set('sort', sortBy);
+      if (page !== 1) params.set('p', page);
+      const query = params.toString();
+      history.pushState({ sortBy, page }, '', query ? `?${query}` : location.pathname);
+    }
+
+    if (scroll) window.scrollTo(0, 0);
+  }
 
   function changeSort(newSortBy) {
-    sortBy = newSortBy;
-    storiesPromise = fetchStories(sortBy);
+    if (newSortBy === sortBy) return;
+    applyParams({ sortBy: newSortBy, page: 1 });
   }
+
+  function nextPage(totalHits) {
+    const maxPage = Math.ceil(totalHits / PAGE_SIZE);
+    if (page < maxPage) applyParams({ page: page + 1 });
+  }
+
+  function prevPage() {
+    if (page > 1) applyParams({ page: page - 1 });
+  }
+
+  $effect(() => {
+    function handlePopState() {
+      applyParams(paramsFromUrl(), { pushHistory: false });
+    }
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  });
 </script>
 
 <table id="hnmain" border="0" cellpadding="0" cellspacing="0" width="85%" bgcolor="#f6f6ef">
@@ -44,15 +94,26 @@
         {#await storiesPromise}
           <p class="loading">Loading...</p>
         {:then stories}
+          {@const start = (page - 1) * PAGE_SIZE}
+          {@const pageHits = stories.hits.slice(start, start + PAGE_SIZE)}
+
           <table border="0" cellpadding="0" cellspacing="0">
             <tbody>
-              {#each stories.hits as story, i}
-                <HnItem {story} rank={i+1} />
+              {#each pageHits as story, i}
+                <HnItem {story} rank={start + i + 1} />
               {/each}
               <tr class="morespace" style="height:10px"></tr>
               <tr>
                 <td colspan="2"></td>
-                <td class='title'><a href='?p=2' class='morelink' rel='next'>More</a></td>
+                <td class='title'>
+                  {#if start + PAGE_SIZE < stories.hits.length}
+                    <a href="?p={page + 1}" class='morelink' rel='next' 
+                       onclick={(e) => { e.preventDefault(); nextPage(stories.hits.length); }}>
+                      More
+                    </a>
+                  {/if}
+
+                </td>
               </tr>
             </tbody>
           </table>
