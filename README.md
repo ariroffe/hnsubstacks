@@ -21,7 +21,8 @@ cd frontend
 npm run dev
 ```
 
-To get the stories from HN (for now):
+To get the stories from HN, I'm querying the following two endpoints:
+
 Ordered by (relevance, points, comments):
 ```bash
 curl "https://hn.algolia.com/api/v1/search?tags=story&restrictSearchableAttributes=url&query=substack.com&hitsPerPage=600" -o stories.json
@@ -30,6 +31,11 @@ curl "https://hn.algolia.com/api/v1/search?tags=story&restrictSearchableAttribut
 Ordered by date:
 ```bash
 curl "https://hn.algolia.com/api/v1/search_by_date?tags=story&restrictSearchableAttributes=url&query=substack.com&hitsPerPage=600" -o new.json
+```
+
+To refresh the KV store (only in DEBUG mode):
+```bash
+curl https://worker.hnsubstacks.workers.dev/api/refresh
 ```
 
 ## Structure
