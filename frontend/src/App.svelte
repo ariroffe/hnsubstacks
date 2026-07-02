@@ -3,14 +3,17 @@
   import HnItem from './lib/HnItem.svelte';
 
   const PAGE_SIZE = 30;
-  const DEFAULT_SORT = 'top';
+  const DEFAULT_SORT = 'hot';
 
   let { sortBy, page } = $state(paramsFromUrl());
   let storiesPromise = $state(fetchStories(sortBy));
   
   function paramsFromUrl() {
     const params = new URLSearchParams(location.search);
-    const sort = params.get('sort') === 'new' ? 'new' : DEFAULT_SORT;
+    let sort = DEFAULT_SORT;
+    const sortParam = params.get('sort');
+    if (sortParam === "new") sort = "new";
+    if (sortParam === "best") sort = "best";
     const page = parseInt(params.get('p'), 10);
     return { sortBy: sort, page: page && page > 0 ? page : 1 };
   }
@@ -76,9 +79,11 @@
               <td style="line-height:12pt; height:10px;">
                 <span class="pagetop">
                   <b class="hnname"><a href="/">hnsubstacks</a></b>
-                  <button class={sortBy === "top" ? "active" : ""} onclick={() => changeSort('top')}>top</button>
+                  <button class={sortBy === "hot" ? "active" : ""} onclick={() => changeSort('hot')}>hot</button>
                   |
                   <button class={sortBy === "new" ? "active" : ""} href="/" onclick={() => changeSort('new')}>new</button>
+                  |
+                  <button class={sortBy === "best" ? "active" : ""} href="/" onclick={() => changeSort('best')}>best</button>
                 </span>
               </td>
             </tr>
@@ -128,7 +133,7 @@
             <table width="100%" cellspacing="0" cellpadding="1">
               <tbody>
                 <tr>
-                    <td bgcolor="#ff6600"></td>
+                  <td bgcolor="#ff6600"></td>
                 </tr>
               </tbody>
             </table>

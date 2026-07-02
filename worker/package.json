@@ -6,6 +6,7 @@
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "start": "wrangler dev",
+    "refresh": "curl https://worker.hnsubstacks.workers.dev/api/refresh",
     "test": "vitest"
   },
   "devDependencies": {

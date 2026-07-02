@@ -2,23 +2,43 @@ const DEBUG = true
 const ALGOLIA_BASE = "https://hn.algolia.com/api/v1";
 const QUERY_PARAMS = "tags=story&restrictSearchableAttributes=url&query=substack.com&hitsPerPage=600";
 
+function hnScore(points, createdAtUnix, now) {
+  const ageHours = (now - createdAtUnix) / 3600;
+  const gravity = 1.8;
+  return (points - 1) / Math.pow(ageHours + 2, gravity);
+}
+
+function computeHot(hits) {
+  const now = Date.now() / 1000;
+  return [...hits]
+    .map(hit => ({
+      ...hit,
+      _hnScore: hnScore(hit.points, hit.created_at_i, now),
+    }))
+    .sort((a, b) => b._hnScore - a._hnScore);
+}
+
 async function fetchAndStore(env) {
-  const [topRes, newRes] = await Promise.all([
-    fetch(`${ALGOLIA_BASE}/search?${QUERY_PARAMS}`),
+  // Fetch both new and best (historical ordered by points)
+  const [newRes, bestRes] = await Promise.all([
     fetch(`${ALGOLIA_BASE}/search_by_date?${QUERY_PARAMS}`),
+	fetch(`${ALGOLIA_BASE}/search?${QUERY_PARAMS}`),
   ]);
 
-  if (!topRes.ok || !newRes.ok) {
+  if (!newRes.ok || !bestRes.ok) {
     throw new Error(
-      `Algolia fetch failed: top=${topRes.status} new=${newRes.status}`
+      `Algolia fetch failed: new=${newRes.status} best=${bestRes.status}`
     );
   }
 
-  const [topData, newData] = await Promise.all([
-    topRes.json(),
+  const [newData, bestData] = await Promise.all([
     newRes.json(),
+	bestRes.json(),
   ]);
 
+  // Compute hot (HNs trending algorithm) from new
+  const hotData = {hits: computeHot(newData.hits)};
+  
   const payload = (data) =>
     JSON.stringify({
       hits: data.hits,
@@ -26,10 +46,13 @@ async function fetchAndStore(env) {
     });
 
   await Promise.all([
-    env.HNSUBSTACKS_KV.put("stories:top", payload(topData), {
-      expirationTtl: 3600, // safety-net TTL; cron refreshes well before this
+	env.HNSUBSTACKS_KV.put("stories:hot", payload(hotData), {
+      expirationTtl: 3600,  // safety-net TTL; cron refreshes well before this
     }),
-    env.HNSUBSTACKS_KV.put("stories:new", payload(newData), {
+	env.HNSUBSTACKS_KV.put("stories:new", payload(newData), {
+      expirationTtl: 3600,
+    }),
+	env.HNSUBSTACKS_KV.put("stories:best", payload(bestData), {
       expirationTtl: 3600,
     }),
   ]);
@@ -49,7 +72,10 @@ export default {
     }
 
     if (url.pathname === "/api/stories") {
-      const sort = url.searchParams.get("sort") === "new" ? "new" : "top";
+	  const sortParam = url.searchParams.get("sort");
+	  let sort = "hot";
+      if (sort === "new") sort = "new";
+	  if (sort === "best") sort = "best";
       const data = await env.HNSUBSTACKS_KV.get(`stories:${sort}`);
 
       if (!data) {
