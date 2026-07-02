@@ -1,10 +1,14 @@
 <script>
-  import stories_top from './data/top.json';
-  import stories_new from './data/new.json';
+  import { fetchStories } from './lib/fetch_stories.js';
   import HnItem from './lib/HnItem.svelte';
 
   let sortBy = $state("top");
-  let stories = $derived(sortBy === "top" ? stories_top.hits : stories_new.hits);
+  let storiesPromise = $state(fetchStories(sortBy));
+
+  function changeSort(newSortBy) {
+    sortBy = newSortBy;
+    storiesPromise = fetchStories(sortBy);
+  }
 </script>
 
 <table id="hnmain" border="0" cellpadding="0" cellspacing="0" width="85%" bgcolor="#f6f6ef">
@@ -22,9 +26,9 @@
               <td style="line-height:12pt; height:10px;">
                 <span class="pagetop">
                   <b class="hnname"><a href="/">hnsubstacks</a></b>
-                  <button class={sortBy === "top" ? "active" : ""} on:click={() => sortBy = "top"}>top</button>
+                  <button class={sortBy === "top" ? "active" : ""} onclick={() => changeSort('top')}>top</button>
                   |
-                  <button class={sortBy === "new" ? "active" : ""} href="/" on:click={() => sortBy = "new"}>new</button>
+                  <button class={sortBy === "new" ? "active" : ""} href="/" onclick={() => changeSort('new')}>new</button>
                 </span>
               </td>
             </tr>
@@ -37,19 +41,24 @@
     
     <tr id="bigbox">
       <td>
-        <table border="0" cellpadding="0" cellspacing="0">
-          <tbody>
-            {#each stories as story, i}
-              <HnItem {story} rank={i+1} />
-            {/each}
-
-            <tr class="morespace" style="height:10px"></tr>
-            <tr>
-              <td colspan="2"></td>
-              <td class='title'><a href='?p=2' class='morelink' rel='next'>More</a></td>
-            </tr>
-          </tbody>
-        </table>
+        {#await storiesPromise}
+          <p class="loading">Loading...</p>
+        {:then stories}
+          <table border="0" cellpadding="0" cellspacing="0">
+            <tbody>
+              {#each stories.hits as story, i}
+                <HnItem {story} rank={i+1} />
+              {/each}
+              <tr class="morespace" style="height:10px"></tr>
+              <tr>
+                <td colspan="2"></td>
+                <td class='title'><a href='?p=2' class='morelink' rel='next'>More</a></td>
+              </tr>
+            </tbody>
+          </table>
+        {:catch error}
+          <p class="loading">Failed to load stories.</p>
+        {/await}
       </td>
     </tr>
 
@@ -74,7 +83,6 @@
   </tbody>
 </table>
 
-
 <style>
   span.pagetop button {
     outline: none;
@@ -85,5 +93,8 @@
   }
   span.pagetop button.active {
     color: white;
+  }
+  p.loading {
+    padding-left: 10px;
   }
 </style>
