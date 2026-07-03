@@ -1,6 +1,27 @@
+// ---------- settings ----------
+
 const DEBUG = true
 const ALGOLIA_BASE = "https://hn.algolia.com/api/v1";
 const QUERY_PARAMS = "tags=story&restrictSearchableAttributes=url&query=substack.com&hitsPerPage=600";
+
+// Domains we never accept as "custom domain" submissions because they're
+// either the app's own domain, the platform's own domain, or not real hosts.
+const DOMAIN_DENYLIST = new Set(["substack.com", "www.substack.com", "hnsubstacks.com"]);
+const DOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": DEBUG ? "*" : "https://hnsubstacks.com",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+};
+
+function jsonResponse(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+  });
+}
+
+// ---------- fetch stories ----------
 
 function hnScore(points, createdAtUnix, now) {
   const ageHours = (now - createdAtUnix) / 3600;
@@ -58,10 +79,158 @@ async function fetchAndStore(env) {
   ]);
 }
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": DEBUG ? "*" : "https://hnsubstacks.com",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-};
+// ---------- custom domain submission ----------
+
+function normalizeDomain(input) {
+  if (typeof input !== "string") return null;
+  let d = input.trim().toLowerCase();
+  if (d.length === 0 || d.length > 253) return null;
+  if (!/^https?:\/\//.test(d)) d = "https://" + d;
+ 
+  let host;
+  try {
+    host = new URL(d).hostname;
+  } catch {
+    return null;
+  }
+ 
+  if (host.startsWith("www.")) host = host.slice(4);
+  if (!DOMAIN_REGEX.test(host)) return null;
+  // reject bare IPs (regex above already requires a dot + letters somewhere,
+  // but belt-and-suspenders against IPv4-looking hosts)
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return null;
+ 
+  return host;
+}
+ 
+async function fetchWithTimeout(url, ms) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, {
+      signal: controller.signal,
+      redirect: "follow",
+      headers: { "User-Agent": "hnsubstacks-domain-validator/1.0" },
+      cf: { cacheTtl: 0 },
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+ 
+// Best-effort automatic check that a domain is actually a Substack.
+// Two independent signals:
+// - the RSS feed's <generator> tag
+// - Substack CDN asset references on the homepage. 
+// Either one is treated as sufficient; if both checks
+// fail or error out, the domain falls back to manual review.
+async function validateSubstackDomain(domain) {
+  const notes = [];
+  let isSubstack = false;
+ 
+  try {
+    const feedRes = await fetchWithTimeout(`https://${domain}/feed`, 5000);
+    if (feedRes.ok) {
+      const feedText = (await feedRes.text()).slice(0, 20000);
+      if (/<generator>\s*Substack\s*<\/generator>/i.test(feedText) || /cdn\.substack\.com/i.test(feedText)) {
+        isSubstack = true;
+        notes.push("feed:generator_substack");
+      } else {
+        notes.push("feed:ok_no_match");
+      }
+    } else {
+      notes.push(`feed:http_${feedRes.status}`);
+    }
+  } catch (e) {
+    notes.push(`feed:error_${e.name}`);
+  }
+ 
+  if (!isSubstack) {
+    try {
+      const homeRes = await fetchWithTimeout(`https://${domain}/`, 5000);
+      if (homeRes.ok) {
+        const html = (await homeRes.text()).slice(0, 50000);
+        if (
+          /substackcdn\.com/i.test(html) ||
+          /content=["']Substack["']/i.test(html) ||
+          /substack\.com\/app-link/i.test(html)
+        ) {
+          isSubstack = true;
+          notes.push("homepage:substack_markers");
+        } else {
+          notes.push("homepage:ok_no_match");
+        }
+      } else {
+        notes.push(`homepage:http_${homeRes.status}`);
+      }
+    } catch (e) {
+      notes.push(`homepage:error_${e.name}`);
+    }
+  }
+ 
+  return { isSubstack, notes: notes.join("; ") };
+}
+ 
+async function handleDomainRequest(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body" }, 400);
+  }
+
+  // Throttle the addition requests to max 5 per hour
+  // const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  // const throttleKey = `domain-throttle:ip:${ip}`;
+  // const submissionsThisHour = parseInt((await env.HNSUBSTACKS_KV.get(throttleKey)) || "0", 10);
+  // const IP_HOURLY_LIMIT = 5;
+  // if (submissionsThisHour >= IP_HOURLY_LIMIT) {
+    // return jsonResponse({ error: "Too many submissions from this IP, please try again later" }, 429);
+  // }
+  // await env.HNSUBSTACKS_KV.put(throttleKey, String(submissionsThisHour + 1), { expirationTtl: 3600 });
+
+  // Normalize the domain
+  const domain = normalizeDomain(body?.domain);
+  if (!domain) {
+    return jsonResponse({ error: "Invalid domain" }, 400);
+  }
+  if (DOMAIN_DENYLIST.has(domain) || domain.endsWith(".substack.com")) {
+    return jsonResponse({ error: "That domain doesn't need to be submitted" }, 400);
+  }
+ 
+  // Check if a row already exists for that domain
+  const existing = await env.DB.prepare(
+    "SELECT id, status FROM custom_domains WHERE domain = ?"
+  ).bind(domain).first();
+  if (existing) {
+    return jsonResponse({ domain, status: existing.status, message: "Already submitted" }, 200);
+  }
+ 
+  // Attempt to auto-validate. If that fails, insert as pending for manual approval
+  const { isSubstack, notes } = await validateSubstackDomain(domain);
+  const now = new Date().toISOString();
+  const status = isSubstack ? "approved" : "pending";
+ 
+  try {
+    await env.DB.prepare(
+      `INSERT INTO custom_domains (domain, status, auto_validated, validation_notes, submitted_at, validated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).bind(domain, status, isSubstack ? 1 : 0, notes, now, isSubstack ? now : null).run();
+  } catch (e) {
+    return jsonResponse({ error: "Could not save submission" }, 500);
+  }
+ 
+  return jsonResponse({
+    domain,
+    status,
+    message: isSubstack
+      ? "Verified automatically and added."
+      : "Could not auto-verify; queued for manual review.",
+  }, 201);
+}
+
+
+// ---------- fetch handler ----------
 
 export default {
   async fetch(request, env, ctx) {
@@ -72,10 +241,10 @@ export default {
     }
 
     if (url.pathname === "/api/stories") {
-	  const sortParam = url.searchParams.get("sort");
-	  let sort = "hot";
+      const sortParam = url.searchParams.get("sort");
+      let sort = "hot";
       if (sort === "new") sort = "new";
-	  if (sort === "best") sort = "best";
+	    if (sort === "best") sort = "best";
       const data = await env.HNSUBSTACKS_KV.get(`stories:${sort}`);
 
       if (!data) {
@@ -93,6 +262,11 @@ export default {
       });
     }
 
+    if (request.method === "POST" && url.pathname === "/api/domains/request") {
+      return handleDomainRequest(request, env);
+    }
+
+    
     // Manual trigger for testing
     if (DEBUG && url.pathname === "/api/refresh") {
       await fetchAndStore(env);

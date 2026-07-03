@@ -12,14 +12,23 @@
 	],
 	"kv_namespaces": [
 		{
-		"binding": "HNSUBSTACKS_KV",
-		"id": "b32baa49fcca4777b7a7a359cb3d2dcd"
+			"binding": "HNSUBSTACKS_KV",
+			"id": "b32baa49fcca4777b7a7a359cb3d2dcd"
 		}
 	],
 	"triggers": {
-		"crons": ["*/10 * * * *"]
-	}
-	
+		"crons": [
+			"*/10 * * * *"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "hnsubstacks-db",
+			"database_id": "ebf80f73-80a1-4e2e-a33b-dcb1e2c7eee2",
+			"remote": true
+		}
+	]
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

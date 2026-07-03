@@ -11,7 +11,7 @@ Hacker News stories from Substack, ordered by score (trending), date or historic
 - **Database:** Cloudflare D1 (SQLite) — custom domain allowlist
 
 ## Strategy
-Using [HN's Algolia API](https://hn.algolia.com/api), fetch 600 stories (20 pages of results) both by date and by points. Compute the trending stories from the new ones, by simulating HN's score algorithm. Save all these results (trending, new, historical best) in a KV store with a long TTL. A scheduled task repeats all of this every 10 minutes. 
+Using [HN's Algolia API](https://hn.algolia.com/api), a Cloudflare Worker fetches 600 stories (20 pages of results) both by date and by points, by searching for "substack.com" in the url. It then computes the trending stories from the new ones, by simulating HN's score algorithm, and saves all these results (trending, new, historical best) in a KV store with a long TTL. A scheduled task repeats all of this every 10 minutes and overwrites the store.
 
 The Svelte 5 frontend is a static site that just queries the worker and displays the (paginated) results.
 

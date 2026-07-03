@@ -1,0 +1,49 @@
+* View all domains in the table:
+
+SELECT * FROM custom_domains;
+
+* View all pending domains:
+
+SELECT * FROM custom_domains
+WHERE status = 'pending';
+
+---
+
+* View the oldest 10 pending domains:
+
+SELECT * FROM custom_domains
+WHERE status = 'pending'
+ORDER BY submitted_at ASC
+LIMIT 10;
+
+* Newest 10 pending:
+
+SELECT * FROM custom_domains
+WHERE status = 'pending'
+ORDER BY submitted_at DESC
+LIMIT 10;
+
+---
+
+* Approve a domain:
+
+UPDATE custom_domains
+SET status = 'approved',
+    validated_at = CURRENT_TIMESTAMP,
+    validation_notes = COALESCE(validation_notes, '') || '; manual:approve'
+WHERE domain = '<good-example.com>';
+
+* Reject a domain:
+
+UPDATE custom_domains
+SET status = 'rejected',
+    validated_at = CURRENT_TIMESTAMP,
+    validation_notes = COALESCE(validation_notes, '') || '; manual:reject'
+WHERE domain = 'google.com';
+
+---
+
+* Delete a domain (we shouldn't have to do this):
+
+DELETE FROM custom_domains
+WHERE domain = 'google.com';
