@@ -2,7 +2,6 @@
 
 const DEBUG = true
 const ALGOLIA_BASE = "https://hn.algolia.com/api/v1";
-const QUERY_PARAMS = "tags=story&restrictSearchableAttributes=url&query=substack.com&hitsPerPage=600";
 
 // Domains we never accept as "custom domain" submissions because they're
 // either the app's own domain, the platform's own domain, or not real hosts.
@@ -24,6 +23,8 @@ function jsonResponse(obj, status = 200) {
 
 // ---------- fetch stories ----------
 
+// --- hot stories ---
+
 function hnScore(points, createdAtUnix, now) {
   const ageHours = (now - createdAtUnix) / 3600;
   const gravity = 1.8;
@@ -40,41 +41,120 @@ function computeHot(hits) {
     .sort((a, b) => b._hnScore - a._hnScore);
 }
 
-async function fetchAndStore(env) {
-  // Fetch both new and best (historical ordered by points)
-  const [newRes, bestRes] = await Promise.all([
-    fetch(`${ALGOLIA_BASE}/search_by_date?${QUERY_PARAMS}`),
-	fetch(`${ALGOLIA_BASE}/search?${QUERY_PARAMS}`),
-  ]);
+// --- fetch helpers ---
 
+async function getApprovedDomains(env) {
+  // Fetch approved domains from the db, return only the domain column
+  const { results } = await env.DB.prepare(
+    "SELECT domain FROM custom_domains WHERE status = 'approved'"
+  ).all();
+  return results.map((r) => r.domain);
+}
+
+function buildAlgoliaEndpoint(searchType, domain, hitsPerPage) {
+  // Return value is something like: 
+  // "https://hn.algolia.com/api/v1/search?tags=story&restrictSearchableAttributes=url&query=substack.com&hitsPerPage=600"
+  const queryParams = new URLSearchParams({
+    tags: "story",
+    restrictSearchableAttributes: "url",
+    query: domain,
+    hitsPerPage: String(hitsPerPage),
+  });
+  return `${ALGOLIA_BASE}/${searchType}?${queryParams}`
+}
+
+async function fetchDomainHits(searchType, domain, hitsPerPage) {
+  // Fetches the result for a single domain and search type (either "search" or "search_by_date").
+  // Note: on failure continues on to the next custom domain, does not break the entire process
+  try {
+    // domains are saved without protocol in the db, add it in the endpoint
+    const res = await fetch(buildAlgoliaEndpoint(searchType, `https://${domain}`, hitsPerPage));
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    let data = await res.json();
+    // query="..." is fuzzy text match, not an exact filter, so enforce hostname match, 
+    // (allowing subdomains of the approved domain? Only for www.
+    return data.hits.filter((h) => {
+      try {
+        const hostname = new URL(h.url).hostname.toLowerCase();
+        const d = domain.toLowerCase();
+        return hostname === d || hostname === `.${www.d}`;
+      } catch {
+        return false;
+      }
+    });
+  } catch (err) {
+    console.error(`Domain fetch failed for ${domain} (${searchType}):`, err.message);
+    return []; // bc this is called from fetchWithConcurrency, which flattens results
+  }
+}
+
+async function fetchWithConcurrency(items, worker, limit = 6) {
+  // Fires up to 6 requests simultaneously. When one finishes, grabs the next one immediately.
+  // Result is an array of arrays (results) which is then flattened in the return statement
+  const results = [];
+  let i = 0;
+  async function run() {
+    while (i < items.length) {
+      const idx = i++;
+      results[idx] = await worker(items[idx]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+  return results.flat();
+}
+
+// --- main fetch and store ---
+
+async function fetchAndStore(env) {
+  // Fetch both new and best (historical ordered by points) for the domain "substack.com"
+  const [newRes, bestRes] = await Promise.all([
+    fetch(buildAlgoliaEndpoint("search_by_date", "substack.com", 600)),
+	  fetch(buildAlgoliaEndpoint("search", "substack.com", 600)),
+  ]);
+  // If this main query fails, break the entire flow
   if (!newRes.ok || !bestRes.ok) {
     throw new Error(
       `Algolia fetch failed: new=${newRes.status} best=${bestRes.status}`
     );
   }
-
-  const [newData, bestData] = await Promise.all([
-    newRes.json(),
-	bestRes.json(),
+  const [newBaseHits, bestBaseHits] = await Promise.all([
+    newRes.json().then(n => n.hits),
+	  bestRes.json().then(b => b.hits),
   ]);
 
-  // Compute hot (HNs trending algorithm) from new
-  const hotData = {hits: computeHot(newData.hits)};
+  // Get stories from cuestom domains
+  const domains = await getApprovedDomains(env);
+  const [newDomainHits, bestDomainHits] = await Promise.all([
+    // The same substack will likey have fewer hits in new than in best, so cap lower
+    fetchWithConcurrency(domains, (domain) => fetchDomainHits("search_by_date", domain, 15)),
+    fetchWithConcurrency(domains, (domain) => fetchDomainHits("search", domain, 30)),
+  ]);
+
+  // Join the results, reorder and slice
+  const newFullHits = [...newBaseHits, ...newDomainHits]
+    .sort((a, b) => b.created_at_i - a.created_at_i)
+    .slice(0, 600);
+  const bestFullHits = [...bestBaseHits, ...bestDomainHits]
+    .sort((a, b) => b.points - a.points)
+    .slice(0, 600);
+
+  // Compute hot (simulating HNs trending algorithm) from new
+  const hotFullHits = computeHot(newFullHits);
   
   const payload = (data) =>
     JSON.stringify({
-      hits: data.hits,
+      hits: data,
       updatedAt: new Date().toISOString(),
     });
 
   await Promise.all([
-	env.HNSUBSTACKS_KV.put("stories:hot", payload(hotData), {
+	env.HNSUBSTACKS_KV.put("stories:hot", payload(hotFullHits), {
       expirationTtl: 3600,  // safety-net TTL; cron refreshes well before this
     }),
-	env.HNSUBSTACKS_KV.put("stories:new", payload(newData), {
+	env.HNSUBSTACKS_KV.put("stories:new", payload(newFullHits), {
       expirationTtl: 3600,
     }),
-	env.HNSUBSTACKS_KV.put("stories:best", payload(bestData), {
+	env.HNSUBSTACKS_KV.put("stories:best", payload(bestFullHits), {
       expirationTtl: 3600,
     }),
   ]);
