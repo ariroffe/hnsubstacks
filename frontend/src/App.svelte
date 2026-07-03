@@ -1,6 +1,7 @@
 <script>
-  import { fetchStories } from './lib/fetch_stories.js';
+  import { fetchStories } from './lib/api.js';
   import HnItem from './lib/HnItem.svelte';
+  import SubmitDomain from './lib/SubmitDomain.svelte';
 
   const PAGE_SIZE = 30;
   const DEFAULT_SORT = 'hot';
@@ -140,9 +141,10 @@
             <br>
             <center>
               <span class="yclinks"><a href="/about/">About hnsubstacks</a> | <a href="#">Repo</a> | <a
-                  target="_blank" href="https://arielroffe.quest/">Author</a></span><br><br>
-                <form method="get" action="#">Request addition of a domain: <input type="text" name="q" size="17"
-                  autocorrect="off" spellcheck="false" autocapitalize="off" autocomplete="off"></form>
+                  target="_blank" href="https://arielroffe.quest/">Author</a></span>
+                  <br>
+                  <br>
+                  <SubmitDomain />
             </center>
         </td>
     </tr>

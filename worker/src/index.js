@@ -12,6 +12,7 @@ const DOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": DEBUG ? "*" : "https://hnsubstacks.com",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
 function jsonResponse(obj, status = 200) {
@@ -192,18 +193,29 @@ async function handleDomainRequest(request, env) {
   // Normalize the domain
   const domain = normalizeDomain(body?.domain);
   if (!domain) {
-    return jsonResponse({ error: "Invalid domain" }, 400);
+    return jsonResponse({ error: "Invalid domain." }, 400);
   }
   if (DOMAIN_DENYLIST.has(domain) || domain.endsWith(".substack.com")) {
-    return jsonResponse({ error: "That domain doesn't need to be submitted" }, 400);
+    return jsonResponse({ error: "That domain doesn't need to be submitted." }, 400);
   }
  
   // Check if a row already exists for that domain
   const existing = await env.DB.prepare(
     "SELECT id, status FROM custom_domains WHERE domain = ?"
   ).bind(domain).first();
+
   if (existing) {
-    return jsonResponse({ domain, status: existing.status, message: "Already submitted" }, 200);
+    const messages = {
+      approved: "Already submitted and approved.",
+      rejected: "Already submitted and rejected.",
+      pending: "Already submitted, pending approval."
+    };
+
+    return jsonResponse({ 
+      domain, 
+      status: existing.status, 
+      message: messages[existing.status] || "Already submitted." 
+    }, 200);
   }
  
   // Attempt to auto-validate. If that fails, insert as pending for manual approval
@@ -217,7 +229,7 @@ async function handleDomainRequest(request, env) {
        VALUES (?, ?, ?, ?, ?, ?)`
     ).bind(domain, status, isSubstack ? 1 : 0, notes, now, isSubstack ? now : null).run();
   } catch (e) {
-    return jsonResponse({ error: "Could not save submission" }, 500);
+    return jsonResponse({ error: "Could not save submission." }, 500);
   }
  
   return jsonResponse({
@@ -243,8 +255,8 @@ export default {
     if (url.pathname === "/api/stories") {
       const sortParam = url.searchParams.get("sort");
       let sort = "hot";
-      if (sort === "new") sort = "new";
-	    if (sort === "best") sort = "best";
+      if (sortParam === "new") sort = "new";
+	    if (sortParam === "best") sort = "best";
       const data = await env.HNSUBSTACKS_KV.get(`stories:${sort}`);
 
       if (!data) {
