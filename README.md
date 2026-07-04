@@ -4,10 +4,10 @@ Hacker News stories from Substack, ordered by score (trending), date or historic
 
 ## Stack
 
-- **Frontend:** Svelte 5 (plain Vite, no SvelteKit), deployed on Cloudflare Pages
 - **Backend:** Cloudflare Workers
+- **Frontend:** Svelte 5 (plain Vite, no SvelteKit), served as static files from the worker
+- **Data source:** [HN Algolia API](https://hn.algolia.com/api)
 - **Cache:** Cloudflare KV — cached Algolia results
-- **Data source:** HN Algolia API
 - **Database:** Cloudflare D1 (SQLite) — custom domain allowlist
 
 ## Strategy
