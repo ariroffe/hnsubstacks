@@ -125,25 +125,29 @@
           {@const start = (page - 1) * PAGE_SIZE}
           {@const pageHits = filteredHits.slice(start, start + PAGE_SIZE)}
 
-          <table border="0" cellpadding="0" cellspacing="0">
-            <tbody>
-              {#each pageHits as story, i (story.objectID)}
-                <HnItem {story} rank={start + i + 1} bind:flagStates />
-              {/each}
-              <tr class="morespace" style="height:10px"></tr>
-              <tr>
-                <td colspan="2"></td>
-                <td class='title'>
-                  {#if start + PAGE_SIZE < stories.hits.length}
-                    <a href="?p={page + 1}" class='morelink' rel='next' 
-                       onclick={(e) => { e.preventDefault(); nextPage(stories.hits.length); }}>
-                      More
-                    </a>
-                  {/if}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          {#if pageHits.length > 0}
+            <table border="0" cellpadding="0" cellspacing="0">
+                <tbody>
+                {#each pageHits as story, i (story.objectID)}
+                    <HnItem {story} rank={start + i + 1} bind:flagStates />
+                {/each}
+                <tr class="morespace" style="height:10px"></tr>
+                <tr>
+                    <td colspan="2"></td>
+                    <td class='title'>
+                    {#if start + PAGE_SIZE < stories.hits.length}
+                        <a href="?p={page + 1}" class='morelink' rel='next' 
+                        onclick={(e) => { e.preventDefault(); nextPage(stories.hits.length); }}>
+                        More
+                        </a>
+                    {/if}
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+          {:else}
+            <p class="loading">Nothing to show.</p>
+          {/if}
         {:catch error}
           <p class="loading">Failed to load stories.</p>
         {/await}
@@ -190,7 +194,7 @@
   input#search-box {
     font-size: 10pt;
     padding: 2px 4px;
-    border: 1px solid #ff9944;
+    border: 1px solid #6EE7B7;
     border-radius: 2px;
     width: 180px;
     height: 19px;
