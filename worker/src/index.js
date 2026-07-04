@@ -76,15 +76,16 @@ async function fetchDomainHits(searchType, domain, hitsPerPage) {
     let data = await res.json();
     // query="..." is fuzzy text match, not an exact filter, so enforce hostname match, 
     // (allowing subdomains of the approved domain? Only for www.
-    return data.hits.filter((h) => {
+    const filtered = data.hits.filter((h) => {
       try {
         const hostname = new URL(h.url).hostname.toLowerCase();
         const d = domain.toLowerCase();
-        return hostname === d || hostname === `.${www.d}`;
+        return hostname === d || hostname === `www.${d}`;
       } catch {
         return false;
       }
-    });
+    })
+    return filtered
   } catch (err) {
     console.error(`Domain fetch failed for ${domain} (${searchType}):`, err.message);
     return []; // bc this is called from fetchWithConcurrency, which flattens results
