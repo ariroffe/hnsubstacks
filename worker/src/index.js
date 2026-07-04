@@ -8,6 +8,9 @@ const ALGOLIA_BASE = "https://hn.algolia.com/api/v1";
 const DOMAIN_DENYLIST = new Set(["substack.com", "www.substack.com", "hnsubstacks.com"]);
 const DOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
 
+// For throttling post requests to add custom domains
+const IP_HOURLY_LIMIT = 5;
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": DEBUG ? "*" : "https://hnsubstacks.com",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -261,14 +264,20 @@ async function handleDomainRequest(request, env) {
   }
 
   // Throttle the addition requests to max 5 per hour
-  // const ip = request.headers.get("CF-Connecting-IP") || "unknown";
-  // const throttleKey = `domain-throttle:ip:${ip}`;
-  // const submissionsThisHour = parseInt((await env.HNSUBSTACKS_KV.get(throttleKey)) || "0", 10);
-  // const IP_HOURLY_LIMIT = 5;
-  // if (submissionsThisHour >= IP_HOURLY_LIMIT) {
-    // return jsonResponse({ error: "Too many submissions from this IP, please try again later" }, 429);
-  // }
-  // await env.HNSUBSTACKS_KV.put(throttleKey, String(submissionsThisHour + 1), { expirationTtl: 3600 });
+  // (low-stakes spam abuse prevention, see also CFs dashboard)
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  if (ip !== "unknown") {
+    const throttleKey = `domain-throttle:ip:${ip}`;
+    const now = Date.now();
+    const raw = await env.HNSUBSTACKS_KV.get(throttleKey);
+    // value is an array of timestamps, filter to those in the last hour
+    const timestamps = raw ? JSON.parse(raw).filter(t => now - t < 3600000) : [];
+    if (timestamps.length >= IP_HOURLY_LIMIT) {
+      return jsonResponse({ error: "Too many submissions from this IP, please try again later" }, 429);
+    }
+    timestamps.push(now);  // Store the filtered array + the new timestamp, discard older entries
+    await env.HNSUBSTACKS_KV.put(throttleKey, JSON.stringify(timestamps), { expirationTtl: 3600 });
+  }
 
   // Normalize the domain
   const domain = normalizeDomain(body?.domain);
@@ -283,14 +292,12 @@ async function handleDomainRequest(request, env) {
   const existing = await env.DB.prepare(
     "SELECT id, status FROM custom_domains WHERE domain = ?"
   ).bind(domain).first();
-
   if (existing) {
     const messages = {
       approved: "Already submitted and approved.",
       rejected: "Already submitted and rejected.",
       pending: "Already submitted, pending approval."
     };
-
     return jsonResponse({ 
       domain, 
       status: existing.status, 
@@ -302,7 +309,6 @@ async function handleDomainRequest(request, env) {
   const { isSubstack, notes } = await validateSubstackDomain(domain);
   const now = new Date().toISOString();
   const status = isSubstack ? "approved" : "pending";
- 
   try {
     await env.DB.prepare(
       `INSERT INTO custom_domains (domain, status, auto_validated, validation_notes, submitted_at, validated_at)
