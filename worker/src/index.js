@@ -106,6 +106,17 @@ async function fetchWithConcurrency(items, worker, limit = 6) {
   return results.flat();
 }
 
+function isSubstackHostname(url) {
+  // Again, Algolia does fuzzy text match, so this is to avoid things like
+  // onsubstack.com or notsubstack.com.evil.net
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return hostname === "substack.com" || hostname.endsWith(".substack.com");
+  } catch {
+    return false;
+  }
+}
+
 // --- main fetch and store ---
 
 async function fetchAndStore(env) {
@@ -121,8 +132,8 @@ async function fetchAndStore(env) {
     );
   }
   const [newBaseHits, bestBaseHits] = await Promise.all([
-    newRes.json().then(n => n.hits),
-	  bestRes.json().then(b => b.hits),
+    newRes.json().then(n => n.hits.filter(h => h.url && isSubstackHostname(h.url))),
+	  bestRes.json().then(b => b.hits.filter(h => h.url && isSubstackHostname(h.url))),
   ]);
 
   // Get stories from cuestom domains
