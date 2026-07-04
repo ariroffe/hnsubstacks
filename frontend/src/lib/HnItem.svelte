@@ -69,7 +69,7 @@
       |
       {#if flagState === 'idle' || flagState === 'error'}
         {#if flaggable}
-          <a href="javascript:void(0)" onclick={handleFlag}>
+          <a href="javascript:void(0)" onclick={handleFlag} title="Flag as non-Substack">
             {flagState === 'error' ? 'flag failed, retry' : 'flag'}
           </a>
         {:else}
@@ -94,6 +94,6 @@
 <style>
   span.flag-disabled {
     color: #bbb;
-    cursor: not-allowed;
+    cursor: default;
   }
 </style>

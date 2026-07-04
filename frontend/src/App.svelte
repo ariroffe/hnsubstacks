@@ -86,13 +86,13 @@
 <table id="hnmain" border="0" cellpadding="0" cellspacing="0" width="85%" bgcolor="#f6f6ef">
   <tbody>
     <tr>
-      <td bgcolor="#ff6600">
+      <td bgcolor="#10B981">
         <table border="0" cellpadding="0" cellspacing="0" width="100%" style="padding:2px">
           <tbody>
             <tr>
               <td style="width:18px;padding-right:4px">
                 <a href="https://hnsubstacks.com">
-                  <img src="/favicon.jpg" width="18" height="18" style="border:1px white solid; display:block">
+                  <img src="/hnsubstacks.jpeg" width="18" height="18" style="border:1px #999 solid; display:block">
                 </a>
               </td>
               <td style="line-height:12pt; height:10px;">
@@ -155,7 +155,7 @@
             <table width="100%" cellspacing="0" cellpadding="1">
               <tbody>
                 <tr>
-                  <td bgcolor="#ff6600"></td>
+                  <td bgcolor="#10B981"></td>
                 </tr>
               </tbody>
             </table>
