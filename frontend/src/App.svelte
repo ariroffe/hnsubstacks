@@ -165,7 +165,7 @@
             </table>
             <br>
             <center>
-              <span class="yclinks"><a href="/about/">About hnsubstacks</a> | <a href="#">Repo</a> | <a
+              <span class="yclinks"><a href="#FIXME">About hnsubstacks</a> | <a href="#FIXME">Repo</a> | <a
                   target="_blank" href="https://arielroffe.quest/">Author</a></span>
                   <br>
                   <br>

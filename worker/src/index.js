@@ -1,6 +1,5 @@
 // ---------- settings ----------
 
-const DEBUG = true
 const ALGOLIA_BASE = "https://hn.algolia.com/api/v1";
 
 // Domains we never accept as "custom domain" submissions because they're
@@ -11,11 +10,13 @@ const DOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0
 // For throttling post requests to add custom domains
 const IP_HOURLY_LIMIT = 5;
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": DEBUG ? "*" : "https://hnsubstacks.com",
+// This should be an env var, but I'm too lazy to change it
+const DEBUG = false  // Flip it to true to use Vite's dev server in frontend/
+const CORS_HEADERS = DEBUG ? {
+  "Access-Control-Allow-Origin": "http://localhost:5173",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
+} : {};
 
 function jsonResponse(obj, status = 200) {
   return new Response(JSON.stringify(obj), {

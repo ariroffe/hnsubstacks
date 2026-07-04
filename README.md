@@ -21,6 +21,25 @@ cd frontend
 npm run dev
 ```
 
+NOTE: To use Vite's dev server (`npm run dev` from above), flip the
+`DEBUG` constant to `true` in index.js.
+To use a local worker for the api instead of the remote one, flip the `LOCAL` const in api.js to `true`. 
+To use a local db instead of the remote one, comment out `remote: true` in wrangler.jsonc.
+
+At some point, I really need to change all this to env vars. 
+
+---
+
+To deploy the changes:
+
+From the frontend dir: `npm run build`. This will generate the
+static assets in `worker/public`. 
+After that, from worker, run `npm run deploy`. 
+
+NOTE: Make sure that all `DEBUG`, `LOCAL`, etc. constants are set to false before deploying (see above).
+
+---
+
 To get the stories from HN, I'm querying the following two endpoints:
 
 Ordered by date (new):
@@ -45,14 +64,28 @@ To refresh the KV store (only in DEBUG mode):
 curl https://worker.hnsubstacks.workers.dev/api/refresh
 ```
 
-## Structure (todo UPDATE!)
+## Structure
 ```
+
 hnsubstacks/
-├── frontend/                 Svelte 5 app
+├── frontend/                    Svelte 5 app (source, not deployed directly)
 │   ├── public/
-│   │   └── news.css          HN CSS file
+│   │   ├── news.css             HN CSS file
+│   │   └── hnsubstacks.jpeg     Favicon
 │   └── src/
-│       ├── data/
-│       │   └── stories.json  Cached API response (dev only)
-│       └── hn-reference/     HN HTML for reference
+│       ├── App.svelte           Main app
+│       ├── lib/
+│       │   ├── HnItem.svelte        Story row component
+│       │   ├── SubmitDomain.svelte  Custom domain submission form
+│       │   └── api.js               API call wrappers
+│       └── example-data/        Algolia JSON reponses kept for reference only, unused
+│
+└── worker/                      Cloudflare Worker (API + static hosting)
+    ├── migrations/
+    │   ├── 0001_init.sql         D1 migration files
+    │   ├── 0002_flagging.sql
+    │   └── cheatsheet.txt        Frequently run SQL commands
+    ├── public/                   Built frontend static assets (output of npm run build)
+    └── src/
+        └── index.js              Worker entrypoint — API routes, cron, fetch/store logic
 ```

@@ -10,6 +10,11 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+    "assets": {
+        "directory": "./public",
+        "binding": "ASSETS",
+        "not_found_handling": "single-page-application"
+    },
 	"kv_namespaces": [
 		{
 			"binding": "HNSUBSTACKS_KV",
