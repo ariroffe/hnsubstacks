@@ -53,3 +53,10 @@ WHERE domain = 'google.com';
 To do any of this in the local db (replace the query for the one you want):
 
 npx wrangler d1 execute DB --local --command="SELECT * FROM custom_domains;"
+
+---
+
+To run a migration:
+
+npx wrangler d1 execute DB --remote --file=./migrations/0002_flagging.sql
+npx wrangler d1 execute DB --local --file=./migrations/0002_flagging.sql

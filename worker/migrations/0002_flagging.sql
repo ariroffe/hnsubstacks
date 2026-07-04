@@ -1,0 +1,2 @@
+ALTER TABLE custom_domains ADD COLUMN flagged INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE custom_domains ADD COLUMN flag_reviewed INTEGER NOT NULL DEFAULT 0;
