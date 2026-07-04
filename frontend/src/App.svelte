@@ -63,6 +63,21 @@
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   });
+
+  // Search box
+  let search = $state('');
+  function matchesSearch(story, query) {
+    const q = query.toLowerCase();
+    const title = (story.title || '').toLowerCase();
+    const url = (story.url || '').toLowerCase();
+    return title.includes(q) || url.includes(q);
+  }
+
+  function handleSearchInput(e) {
+    search = e.target.value;
+    // Reset to page 1 whenever the filter changes so results aren't hidden on a stale page
+    if (page !== 1) applyParams({ page: 1 }, { pushHistory: false, scroll: false });
+  }
 </script>
 
 <table id="hnmain" border="0" cellpadding="0" cellspacing="0" width="85%" bgcolor="#f6f6ef">
@@ -85,6 +100,9 @@
                   <button class={sortBy === "new" ? "active" : ""} href="/" onclick={() => changeSort('new')}>new</button>
                   |
                   <button class={sortBy === "best" ? "active" : ""} href="/" onclick={() => changeSort('best')}>best</button>
+                  |
+                  <label for="search-box">filter:</label>
+                  <input type="text" id="search-box" placeholder="Title or url..." value={search} oninput={handleSearchInput} />
                 </span>
               </td>
             </tr>
@@ -100,8 +118,9 @@
         {#await storiesPromise}
           <p class="loading">Loading...</p>
         {:then stories}
+          {@const filteredHits = search ? stories.hits.filter((story) => matchesSearch(story, search)) : stories.hits}
           {@const start = (page - 1) * PAGE_SIZE}
-          {@const pageHits = stories.hits.slice(start, start + PAGE_SIZE)}
+          {@const pageHits = filteredHits.slice(start, start + PAGE_SIZE)}
 
           <table border="0" cellpadding="0" cellspacing="0">
             <tbody>
@@ -152,7 +171,8 @@
 </table>
 
 <style>
-  span.pagetop button {
+  span.pagetop button, 
+  span.pagetop label {
     outline: none;
     background: transparent;
     border: none;
@@ -164,5 +184,20 @@
   }
   p.loading {
     padding-left: 10px;
+  }
+  input#search-box {
+    font-size: 10pt;
+    padding: 2px 4px;
+    border: 1px solid #ff9944;
+    border-radius: 2px;
+    width: 180px;
+    height: 19px;
+    width: 140px;
+    padding: 0 5px;
+  }
+  input#search-box::placeholder {
+    font-family: Verdana, Geneva, sans-serif;
+    font-size: inherit;
+    color: #828282;
   }
 </style>
