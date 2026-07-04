@@ -22,3 +22,17 @@ export async function submitDomain(domain) {
     return { error: "Network error, please try again" };
   }
 }
+
+export async function flagDomain(domain) {
+  try {
+    const res = await fetch(`${WORKER_URL}/api/domains/flag`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain }),
+    });
+    const data = await res.json();
+    return res.ok ? data : { error: data.error || "Something went wrong" };
+  } catch {
+    return { error: "Network error, please try again" };
+  }
+}

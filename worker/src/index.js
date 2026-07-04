@@ -338,6 +338,45 @@ async function handleDomainRequest(request, env) {
   }, 201);
 }
 
+// ---------- flag custom domains ----------
+
+async function handleFlagDomain(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: "Invalid request body" }, 400);
+  }
+
+  const domain = (body.domain || "").trim().toLowerCase();
+  if (!domain) {
+    return jsonResponse({ error: "Domain is required" }, 400);
+  }
+  if (domain === "substack.com" || domain.endsWith(".substack.com")) {
+    return jsonResponse({ error: "This domain cannot be flagged" }, 400);
+  }
+
+  const row = await env.DB.prepare(
+    "SELECT status, auto_validated, flagged FROM custom_domains WHERE domain = ?"
+  ).bind(domain).first();
+
+  if (!row) {
+    return jsonResponse({ error: "Domain not found" }, 404);
+  }
+  if (row.status !== "approved" || row.auto_validated !== 1) {
+    return jsonResponse({ error: "This domain is not eligible to be flagged" }, 400);
+  }
+  if (row.flagged === 1) {
+    // Already flagged — treat as success, no need to error
+    return jsonResponse({ success: true });
+  }
+
+  await env.DB.prepare(
+    "UPDATE custom_domains SET flagged = 1 WHERE domain = ?"
+  ).bind(domain).run();
+
+  return jsonResponse({ success: true });
+}
 
 // ---------- fetch handler ----------
 
@@ -349,7 +388,7 @@ export default {
       return new Response(null, { headers: CORS_HEADERS });
     }
 
-    if (url.pathname === "/api/stories") {
+    if (request.method === "GET" && url.pathname === "/api/stories") {
       const sortParam = url.searchParams.get("sort");
       let sort = "hot";
       if (sortParam === "new") sort = "new";
@@ -375,6 +414,9 @@ export default {
       return handleDomainRequest(request, env);
     }
 
+    if (request.method === "POST" && url.pathname === "/api/domains/flag") {
+      return handleFlagDomain(request, env);
+    }
     
     // Manual trigger for testing
     if (DEBUG && url.pathname === "/api/refresh") {

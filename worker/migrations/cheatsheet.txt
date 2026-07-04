@@ -9,19 +9,14 @@ WHERE status = 'pending';
 
 ---
 
-* View the oldest 10 pending domains:
+* View the oldest 10 pending approval domains:
 
 SELECT * FROM custom_domains
 WHERE status = 'pending'
 ORDER BY submitted_at ASC
 LIMIT 10;
 
-* Newest 10 pending:
-
-SELECT * FROM custom_domains
-WHERE status = 'pending'
-ORDER BY submitted_at DESC
-LIMIT 10;
+* Newest 10 pending: replace ASC for DESC
 
 ---
 
@@ -43,10 +38,38 @@ WHERE domain = 'google.com';
 
 ---
 
+* View first 10 flagged domains:
+
+SELECT id, domain, status, flagged, flag_reviewed, submitted_at 
+FROM custom_domains 
+WHERE flagged = 1 
+ORDER BY submitted_at ASC 
+LIMIT 10;
+
+Last 10: replace ASC for DESC
+
+* Review a flag and keep the domain approved:
+
+UPDATE custom_domains 
+SET flag_reviewed = 1,
+    validated_at = CURRENT_TIMESTAMP
+WHERE domain = 'www.noahpinion.blog';
+
+* Review a flag and reject the domain:
+
+UPDATE custom_domains 
+SET flag_reviewed = 1,
+    status = 'rejected',
+    validation_notes = COALESCE(validation_notes, '') || '; flag: rejected',
+    validated_at = CURRENT_TIMESTAMP
+WHERE domain = '<example.com>';
+
+---
+
 * Delete a domain (we shouldn't have to do this):
 
 DELETE FROM custom_domains
-WHERE domain = 'google.com';
+WHERE domain = '<google.com>';
 
 ---
 
