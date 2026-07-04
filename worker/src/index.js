@@ -13,7 +13,7 @@ const IP_HOURLY_LIMIT = 5;
 // This should be an env var, but I'm too lazy to change it
 const DEBUG = false  // Flip it to true to use Vite's dev server in frontend/
 const CORS_HEADERS = DEBUG ? {
-  "Access-Control-Allow-Origin": "http://localhost:5173",
+  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 } : {};
