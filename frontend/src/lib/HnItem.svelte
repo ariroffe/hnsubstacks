@@ -30,9 +30,7 @@
     <span class="titleline">
       <a href={story.url}>{story.title}</a>
       <span class="sitebit comhead">
-        (<a href={`https://news.ycombinator.com/from?site=${domain(story.url)}`}>
-          <span class="sitestr">{domain(story.url)}</span>
-        </a>)
+        (<a href={`https://news.ycombinator.com/from?site=${domain(story.url)}`}><span class="sitestr">{domain(story.url)}</span></a>)
       </span>
     </span>
   </td>
