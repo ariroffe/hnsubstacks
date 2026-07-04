@@ -6,6 +6,9 @@
   const PAGE_SIZE = 30;
   const DEFAULT_SORT = 'hot';
 
+  // domain -> 'idle' | 'loading' | 'flagged' | 'error'
+  let flagStates = $state({});
+
   let { sortBy, page } = $state(paramsFromUrl());
   let storiesPromise = $state(fetchStories(sortBy));
   
@@ -102,7 +105,7 @@
                   <button class={sortBy === "best" ? "active" : ""} href="/" onclick={() => changeSort('best')}>best</button>
                   |
                   <label for="search-box">filter:</label>
-                  <input type="text" id="search-box" placeholder="Title or url..." value={search} oninput={handleSearchInput} />
+                  <input type="text" id="search-box" placeholder="title or url..." value={search} oninput={handleSearchInput} />
                 </span>
               </td>
             </tr>
@@ -124,8 +127,8 @@
 
           <table border="0" cellpadding="0" cellspacing="0">
             <tbody>
-              {#each pageHits as story, i}
-                <HnItem {story} rank={start + i + 1} />
+              {#each pageHits as story, i (story.objectID)}
+                <HnItem {story} rank={start + i + 1} bind:flagStates />
               {/each}
               <tr class="morespace" style="height:10px"></tr>
               <tr>
@@ -137,7 +140,6 @@
                       More
                     </a>
                   {/if}
-
                 </td>
               </tr>
             </tbody>
