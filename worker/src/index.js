@@ -277,7 +277,7 @@ async function handleDomainRequest(request, env) {
   }
 
   // Throttle the addition requests to max 5 per hour
-  // (low-stakes spam abuse prevention, see also CFs dashboard)
+  // (low-stakes spam abuse prevention, see also CFs WAF -> Rate limiting rules)
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   if (ip !== "unknown") {
     const throttleKey = `domain-throttle:ip:${ip}`;

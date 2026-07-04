@@ -59,9 +59,9 @@ score = (points - 1) / (age_in_hours + 2) ^ gravity
 (gravity is set to 1.8).
 
 
-To refresh the KV store (only in DEBUG mode):
+To run the scheduled task and refresh the KV store (only in DEBUG mode):
 ```bash
-curl https://worker.hnsubstacks.workers.dev/api/refresh
+curl "http://localhost:8787/cdn-cgi/handler/scheduled"
 ```
 
 ## Structure
