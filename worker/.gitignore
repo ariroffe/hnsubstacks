@@ -1,6 +1,9 @@
 # Static assets (fontend build)
 public/
 
+# db backups
+dbbackups/
+
 # Logs
 
 logs

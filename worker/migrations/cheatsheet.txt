@@ -83,3 +83,7 @@ To run a migration:
 
 npx wrangler d1 execute DB --remote --file=./migrations/0002_flagging.sql
 npx wrangler d1 execute DB --local --file=./migrations/0002_flagging.sql
+
+Backup the entire database (from hnsubstacks/worker):
+
+npm run backup_db

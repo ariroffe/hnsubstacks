@@ -7,7 +7,8 @@
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "refresh": "curl https://worker.hnsubstacks.workers.dev/api/refresh",
-    "test": "vitest"
+    "test": "vitest",
+    "backup_db": "npx wrangler d1 export hnsubstacks-db --remote -y --output=\"dbbackups/$(date +%Y_%m_%d)_backup.sql\""
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.4",
