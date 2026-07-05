@@ -1,6 +1,19 @@
+import {
+  buildAlgoliaEndpoint,
+  fetchWithConcurrency,
+  slimHit,
+  getHostnameFast,
+  isSubstackHostname,
+  payload,
+  normalizeDomain,
+  fetchWithTimeout,
+} from "./helpers.js"; 
+
 // ---------- settings ----------
 
-const ALGOLIA_BASE = "https://hn.algolia.com/api/v1";
+const DEBUG = false  // Flip it to true to use Vite's dev server in frontend/
+
+const BASE_NUM_RESULTS = 300;  // How many results to fetch from Algolia an to store in the KV
 
 // Domains we never accept as "custom domain" submissions because they're
 // either the app's own domain, the platform's own domain, or not real hosts.
@@ -11,7 +24,6 @@ const DOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0
 const IP_HOURLY_LIMIT = 5;
 
 // This should be an env var, but I'm too lazy to change it
-const DEBUG = false  // Flip it to true to use Vite's dev server in frontend/
 const CORS_HEADERS = DEBUG ? {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -45,7 +57,7 @@ function computeHot(hits) {
     .sort((a, b) => b._hnScore - a._hnScore);
 }
 
-// --- fetch helpers ---
+// --- custom domains ---
 
 async function getApprovedDomains(env) {
   // Fetch approved domains from the db, return only the domain column
@@ -55,19 +67,7 @@ async function getApprovedDomains(env) {
   return results.map((r) => r.domain);
 }
 
-function buildAlgoliaEndpoint(searchType, domain, hitsPerPage) {
-  // Return value is something like: 
-  // "https://hn.algolia.com/api/v1/search?tags=story&restrictSearchableAttributes=url&query=substack.com&hitsPerPage=600"
-  const queryParams = new URLSearchParams({
-    tags: "story",
-    restrictSearchableAttributes: "url",
-    query: domain,
-    hitsPerPage: String(hitsPerPage),
-  });
-  return `${ALGOLIA_BASE}/${searchType}?${queryParams}`
-}
-
-async function fetchDomainHits(searchType, domain, hitsPerPage) {
+async function fetchCustomDomainHits(searchType, domain, hitsPerPage) {
   // Fetches the result for a single domain and search type (either "search" or "search_by_date").
   // Note: on failure continues on to the next custom domain, does not break the entire process
   try {
@@ -77,15 +77,14 @@ async function fetchDomainHits(searchType, domain, hitsPerPage) {
     let data = await res.json();
     // query="..." is fuzzy text match, not an exact filter, so enforce hostname match, 
     // (allowing subdomains of the approved domain? Only for www.
-    const filtered = data.hits.filter((h) => {
-      try {
-        const hostname = new URL(h.url).hostname.toLowerCase();
-        const d = domain.toLowerCase();
-        return hostname === d || hostname === `www.${d}`;
-      } catch {
-        return false;
+    const filtered = [];
+    for (const h of data.hits) {
+      if (!h.url) continue;
+      const hostname = getHostnameFast(h.url);
+      if (hostname && hostname === domain) {
+        filtered.push(slimHit(h));
       }
-    })
+    }
     return filtered
   } catch (err) {
     console.error(`Domain fetch failed for ${domain} (${searchType}):`, err.message);
@@ -93,127 +92,97 @@ async function fetchDomainHits(searchType, domain, hitsPerPage) {
   }
 }
 
-async function fetchWithConcurrency(items, worker, limit = 6) {
-  // Fires up to 6 requests simultaneously. When one finishes, grabs the next one immediately.
-  // Result is an array of arrays (results) which is then flattened in the return statement
-  const results = [];
-  let i = 0;
-  async function run() {
-    while (i < items.length) {
-      const idx = i++;
-      results[idx] = await worker(items[idx]);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
-  return results.flat();
-}
-
-function isSubstackHostname(url) {
-  // Again, Algolia does fuzzy text match, so this is to avoid things like
-  // onsubstack.com or notsubstack.com.evil.net
-  try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    return hostname === "substack.com" || hostname.endsWith(".substack.com");
-  } catch {
-    return false;
-  }
-}
-
 // --- main fetch and store ---
 
-async function fetchAndStore(env) {
-  // Fetch both new and best (historical ordered by points) for the domain "substack.com"
-  const [newRes, bestRes] = await Promise.all([
-    fetch(buildAlgoliaEndpoint("search_by_date", "substack.com", 600)),
-	  fetch(buildAlgoliaEndpoint("search", "substack.com", 600)),
-  ]);
-  // If this main query fails, break the entire flow
-  if (!newRes.ok || !bestRes.ok) {
-    throw new Error(
-      `Algolia fetch failed: new=${newRes.status} best=${bestRes.status}`
-    );
+async function fetchAndStoreNew(env) {
+  // Fetch from Algolia
+  const newRes = await fetch(buildAlgoliaEndpoint("search_by_date", "substack.com", BASE_NUM_RESULTS));
+  if (!newRes.ok) {
+    throw new Error(`Algolia fetch failed: new=${newRes.status}`);
   }
-  const [newBaseHits, bestBaseHits] = await Promise.all([
-    newRes.json().then(n => n.hits.filter(h => h.url && isSubstackHostname(h.url))),
-	  bestRes.json().then(b => b.hits.filter(h => h.url && isSubstackHostname(h.url))),
-  ]);
+  // Parse, check exact hostname match, remove unnecesary fields
+  const newBaseHits = await newRes.json().then(n => {
+    const out = [];
+    for (const h of n.hits) {
+      if (h.url && isSubstackHostname(h.url)) out.push(slimHit(h));
+    }
+    return out;
+  });
 
-  // Get stories from cuestom domains
   const domains = await getApprovedDomains(env);
-  const [newDomainHits, bestDomainHits] = await Promise.all([
-    // The same substack will likey have fewer hits in new than in best, so cap lower
-    fetchWithConcurrency(domains, (domain) => fetchDomainHits("search_by_date", domain, 15)),
-    fetchWithConcurrency(domains, (domain) => fetchDomainHits("search", domain, 30)),
-  ]);
+  const newDomainHits = await fetchWithConcurrency(domains, (domain) =>
+    // Unlikely that there are more than 10 new items from the same custom domain
+    fetchCustomDomainHits("search_by_date", domain, 10)
+  );
 
-  // Join the results, reorder and slice
   const newFullHits = [...newBaseHits, ...newDomainHits]
     .sort((a, b) => b.created_at_i - a.created_at_i)
-    .slice(0, 600);
+    .slice(0, BASE_NUM_RESULTS);
+
+  await env.HNSUBSTACKS_KV.put("stories:new", payload(newFullHits), {
+    expirationTtl: 3600,
+  });
+
+  return newFullHits;
+}
+
+async function fetchAndStoreBest(env) {
+  // Fetch from Algolia
+  const bestRes = await fetch(buildAlgoliaEndpoint("search", "substack.com", BASE_NUM_RESULTS));
+  if (!bestRes.ok) {
+    throw new Error(`Algolia fetch failed: best=${bestRes.status}`);
+  }
+  // Parse, check exact hostname match, remove unnecesary fields
+  const bestBaseHits = await bestRes.json().then(n => {
+    const out = [];
+    for (const h of n.hits) {
+      if (h.url && isSubstackHostname(h.url)) out.push(slimHit(h));
+    }
+    return out;
+  });
+
+  const domains = await getApprovedDomains(env);
+  const bestDomainHits = await fetchWithConcurrency(domains, (domain) =>
+    // Up to 30 results from the same custom domain
+    fetchCustomDomainHits("search", domain, 30)
+  );
+
   const bestFullHits = [...bestBaseHits, ...bestDomainHits]
     .sort((a, b) => b.points - a.points)
-    .slice(0, 600);
+    .slice(0, BASE_NUM_RESULTS);
 
-  // Compute hot (simulating HNs trending algorithm) from new
-  const hotFullHits = computeHot(newFullHits);
-  
-  const payload = (data) =>
-    JSON.stringify({
-      hits: data,
-      updatedAt: new Date().toISOString(),
-    });
+  await env.HNSUBSTACKS_KV.put("stories:best", payload(bestFullHits), {
+    expirationTtl: 3600,
+  });
 
-  await Promise.all([
-	env.HNSUBSTACKS_KV.put("stories:hot", payload(hotFullHits), {
-      expirationTtl: 3600,  // safety-net TTL; cron refreshes well before this
-    }),
-	env.HNSUBSTACKS_KV.put("stories:new", payload(newFullHits), {
-      expirationTtl: 3600,
-    }),
-	env.HNSUBSTACKS_KV.put("stories:best", payload(bestFullHits), {
-      expirationTtl: 3600,
-    }),
+  return bestFullHits;
+}
+
+async function computeAndStoreHot(env, newFullHits = null) {
+  // Reuse hits if passed in (e.g. from fetchAndStoreAll), otherwise read from KV
+  let hits = newFullHits;
+  if (!hits) {
+    const stored = await env.HNSUBSTACKS_KV.get("stories:new");
+    if (!stored) return; // nothing to compute from yet
+    hits = JSON.parse(stored).hits;
+  }
+
+  const hotFullHits = computeHot(hits);
+
+  await env.HNSUBSTACKS_KV.put("stories:hot", payload(hotFullHits), {
+    expirationTtl: 3600,
+  });
+}
+
+async function fetchAndStoreAll(env) {
+  const [newFullHits] = await Promise.all([
+    fetchAndStoreNew(env),
+    fetchAndStoreBest(env),
   ]);
+  await computeAndStoreHot(env, newFullHits);
 }
 
 // ---------- custom domain submission ----------
-
-function normalizeDomain(input) {
-  if (typeof input !== "string") return null;
-  let d = input.trim().toLowerCase();
-  if (d.length === 0 || d.length > 253) return null;
-  if (!/^https?:\/\//.test(d)) d = "https://" + d;
- 
-  let host;
-  try {
-    host = new URL(d).hostname;
-  } catch {
-    return null;
-  }
- 
-  if (host.startsWith("www.")) host = host.slice(4);
-  if (!DOMAIN_REGEX.test(host)) return null;
-  // reject bare IPs (regex above already requires a dot + letters somewhere,
-  // but belt-and-suspenders against IPv4-looking hosts)
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return null;
- 
-  return host;
-}
- 
-async function fetchWithTimeout(url, ms) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ms);
-  try {
-    return await fetch(url, {
-      signal: controller.signal,
-      redirect: "follow",
-      headers: { "User-Agent": "hnsubstacks-domain-validator/1.0" },
-      cf: { cacheTtl: 0 },
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-}
  
 // Best-effort automatic check that a domain is actually a Substack.
 // Two independent signals:
@@ -394,13 +363,13 @@ export default {
       const sortParam = url.searchParams.get("sort");
       let sort = "hot";
       if (sortParam === "new") sort = "new";
-	    if (sortParam === "best") sort = "best";
+      if (sortParam === "best") sort = "best";
       const data = await env.HNSUBSTACKS_KV.get(`stories:${sort}`);
 
       if (!data) {
         // Cold-start fallback: only hit if KV is truly empty (first deploy,
         // or safety-net TTL expired because cron somehow didn't run).
-        await fetchAndStore(env);
+        await fetchAndStoreAll(env);
         const fresh = await env.HNSUBSTACKS_KV.get(`stories:${sort}`);
         return new Response(fresh, {
           headers: { "Content-Type": "application/json", ...CORS_HEADERS },
@@ -419,10 +388,10 @@ export default {
     if (request.method === "POST" && url.pathname === "/api/domains/flag") {
       return handleFlagDomain(request, env);
     }
-    
+
     // Manual trigger for testing
     if (DEBUG && url.pathname === "/api/refresh") {
-      await fetchAndStore(env);
+      await fetchAndStoreAll(env);
       return new Response("refreshed", { headers: CORS_HEADERS });
     }
 
@@ -430,6 +399,14 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(fetchAndStore(env));
+    // I'm separating the refresh of the new / best / hot stores into 3 cron 
+    // triggers bc otherwise we sometimes hit CFs free 10ms of cpu time
+    if (event.cron === "*/10 * * * *") {
+      ctx.waitUntil(fetchAndStoreNew(env));
+    } else if (event.cron === "3-59/10 * * * *") {
+      ctx.waitUntil(fetchAndStoreBest(env));
+    } else if (event.cron === "6-59/10 * * * *") {
+      ctx.waitUntil(computeAndStoreHot(env));
+    }
   },
 };
