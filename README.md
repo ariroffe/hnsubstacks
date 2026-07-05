@@ -2,6 +2,8 @@
 
 Hacker News stories from Substack, ordered by score (trending), date or historical points.
 
+[https://hnsubstacks.com](https://hnsubstacks.com)
+
 ## Stack
 
 - **Backend:** Cloudflare Workers
@@ -88,3 +90,9 @@ hnsubstacks/
     └── src/
         └── index.js              Worker entrypoint — API routes, cron, fetch/store logic
 ```
+
+## Contributing
+
+Please submit any issues you find via GitHub's Isses page. 
+
+**This is a side project** that I made over a weekend. Although I will fix issues and keep maintaining it, I'm not going to be able to dedicate a lot of time to it, so I'm not planning on adding new features. If there's something that you feel would really benefit this site, please discuss it in Issues before getting to work and making a pull request.
