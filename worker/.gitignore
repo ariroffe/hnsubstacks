@@ -1,3 +1,6 @@
+# env vars
+#.dev.vars
+
 # Static assets (fontend build)
 public/
 

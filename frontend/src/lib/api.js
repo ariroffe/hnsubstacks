@@ -1,6 +1,6 @@
 // @ts-nocheck
-// we should use an env variable for this, but I'm too lazy to implement it
-const LOCAL = false  // Flip to true to query the local instance of the worker insted of the remote
+// To query the local instance of the worker instead of the remote one.
+const LOCAL = import.meta.env.DEV;  // Set automatically by vite
 const WORKER_URL = LOCAL ? "http://127.0.0.1:8787" : "";
 // Since the frontend is now served from the same Worker as the API, relative paths work directly
 // const WORKER_URL = LOCAL ? "http://127.0.0.1:8787" : "https://worker.hnsubstacks.workers.dev";

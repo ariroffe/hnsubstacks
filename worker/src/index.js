@@ -11,8 +11,6 @@ import {
 
 // ---------- settings ----------
 
-const DEBUG = false  // Flip it to true to use Vite's dev server in frontend/
-
 const BASE_NUM_RESULTS = 300;  // How many results to fetch from Algolia an to store in the KV
 
 // Domains we never accept as "custom domain" submissions because they're
@@ -23,12 +21,10 @@ const DOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0
 // For throttling post requests to add custom domains
 const IP_HOURLY_LIMIT = 5;
 
-// This should be an env var, but I'm too lazy to change it
-const CORS_HEADERS = DEBUG ? {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-} : {};
+// Do not modify these, they are changed in the fetch and scheduled handlers below in dev
+// (this is kind of hacky but that's ok for now)
+let DEBUG = false;
+let CORS_HEADERS = {};
 
 function jsonResponse(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
@@ -67,12 +63,12 @@ async function getApprovedDomains(env) {
   return results.map((r) => r.domain);
 }
 
-async function fetchCustomDomainHits(searchType, domain, hitsPerPage) {
+async function fetchCustomDomainHits(searchType, domain, hitsPerPage, sinceTimestamp = null) {
   // Fetches the result for a single domain and search type (either "search" or "search_by_date").
   // Note: on failure continues on to the next custom domain, does not break the entire process
   try {
     // domains are saved without protocol in the db, add it in the endpoint
-    const res = await fetch(buildAlgoliaEndpoint(searchType, `https://${domain}`, hitsPerPage));
+    const res = await fetch(buildAlgoliaEndpoint(searchType, `https://${domain}`, hitsPerPage, sinceTimestamp));
     if (!res.ok) throw new Error(`status ${res.status}`);
     let data = await res.json();
     // query="..." is fuzzy text match, not an exact filter, so enforce hostname match, 
@@ -95,6 +91,18 @@ async function fetchCustomDomainHits(searchType, domain, hitsPerPage) {
 // --- main fetch and store ---
 
 async function fetchAndStoreNew(env) {
+  const prevRaw = await env.HNSUBSTACKS_KV.get("stories:new");
+  // If the store was not set, fetch from scratch
+  if (!prevRaw) {
+    return fetchAndStoreNewFull(env);
+  }
+  // If it was, only compute new hits from the last time we saved
+  const prev = JSON.parse(prevRaw);
+  const sinceTimestamp = Math.floor(new Date(prev.updatedAt).getTime() / 1000);
+  return fetchAndStoreNewIncremental(env, prev.hits, sinceTimestamp);
+}
+
+async function fetchAndStoreNewFull(env) {
   // Fetch from Algolia
   const newRes = await fetch(buildAlgoliaEndpoint("search_by_date", "substack.com", BASE_NUM_RESULTS));
   if (!newRes.ok) {
@@ -126,6 +134,47 @@ async function fetchAndStoreNew(env) {
   return newFullHits;
 }
 
+async function fetchAndStoreNewIncremental(env, prevHits, sinceTimestamp) {
+  // Fetch from Algolia, only items newer than the last stored update
+  const newEndpoint = `${buildAlgoliaEndpoint("search_by_date", "substack.com", BASE_NUM_RESULTS, sinceTimestamp)}`;
+  const newRes = await fetch(newEndpoint);
+  if (!newRes.ok) {
+    throw new Error(`Algolia fetch failed: new=${newRes.status}`);
+  }
+  // Parse, check exact hostname match, remove unnecesary fields
+  const newBaseHits = await newRes.json().then(n => {
+    const out = [];
+    for (const h of n.hits) {
+      if (h.url && isSubstackHostname(h.url)) out.push(slimHit(h));
+    }
+    return out;
+  });
+
+  const domains = await getApprovedDomains(env);
+  const newDomainHits = await fetchWithConcurrency(domains, (domain) =>
+    // Unlikely that there are more than 10 new items from the same custom domain
+    fetchCustomDomainHits("search_by_date", domain, 10, sinceTimestamp)
+  );
+  
+  // Merge fresh hits (domain + base) with previous hits, keeping the freshest
+  // version of each story and dropping stale duplicates
+  const combined = [...newDomainHits, ...newBaseHits, ...prevHits];
+  const seen = new Set();
+  const newFullHits = combined
+    .filter(h => {
+      if (seen.has(h.objectID)) return false;
+      seen.add(h.objectID);
+      return true;
+    })
+    .sort((a, b) => b.created_at_i - a.created_at_i)
+    .slice(0, BASE_NUM_RESULTS);
+
+  await env.HNSUBSTACKS_KV.put("stories:new", payload(newFullHits), {
+    expirationTtl: 3600,
+  });
+  return newFullHits;
+}
+
 async function fetchAndStoreBest(env) {
   // Fetch from Algolia
   const bestRes = await fetch(buildAlgoliaEndpoint("search", "substack.com", BASE_NUM_RESULTS));
@@ -152,7 +201,7 @@ async function fetchAndStoreBest(env) {
     .slice(0, BASE_NUM_RESULTS);
 
   await env.HNSUBSTACKS_KV.put("stories:best", payload(bestFullHits), {
-    expirationTtl: 3600,
+    expirationTtl: 3600 * 13, // 13h safety margin beyond the 6h refresh cycle,
   });
 
   return bestFullHits;
@@ -176,7 +225,7 @@ async function computeAndStoreHot(env, newFullHits = null) {
 
 async function fetchAndStoreAll(env) {
   const [newFullHits] = await Promise.all([
-    fetchAndStoreNew(env),
+    fetchAndStoreNewFull(env),
     fetchAndStoreBest(env),
   ]);
   await computeAndStoreHot(env, newFullHits);
@@ -353,6 +402,15 @@ async function handleFlagDomain(request, env) {
 
 export default {
   async fetch(request, env, ctx) {
+    DEBUG = env.DEBUG === "true";
+    if (DEBUG) {
+      CORS_HEADERS = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      }
+    }
+
     const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
@@ -399,14 +457,23 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
+    DEBUG = env.DEBUG === "true";
+    if (DEBUG) {
+      CORS_HEADERS = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      }
+    }
+
     // I'm separating the refresh of the new / best / hot stores into 3 cron 
     // triggers bc otherwise we sometimes hit CFs free 10ms of cpu time
     if (event.cron === "*/10 * * * *") {
       ctx.waitUntil(fetchAndStoreNew(env));
-    } else if (event.cron === "3-59/10 * * * *") {
-      ctx.waitUntil(fetchAndStoreBest(env));
-    } else if (event.cron === "6-59/10 * * * *") {
+    } else if (event.cron === "2-59/10 * * * *") {
       ctx.waitUntil(computeAndStoreHot(env));
+    } else if (event.cron === "0 */6 * * *") {
+      ctx.waitUntil(fetchAndStoreBest(env));
     }
   },
 };

@@ -13,7 +13,16 @@ Hacker News stories from Substack, ordered by score (trending), date or historic
 - **Database:** Cloudflare D1 (SQLite) — custom domain allowlist
 
 ## Strategy
-Using [HN's Algolia API](https://hn.algolia.com/api), a Cloudflare Worker fetches 300 stories (10 pages of results) both by date and by points, by searching for "substack.com" in the url. It then computes the trending stories from the new ones, by simulating HN's score algorithm, and saves all these results (trending, new, historical best) in a KV store with a long TTL. A scheduled task repeats all of this every 10 minutes and overwrites the store.
+I use [HN's Algolia API](https://hn.algolia.com/api) to fetch substack stories by searching for "substack.com" in the url.
+
+I do this via a CloudFlare worker that has 3 separate cron triggers:
+- The first fetches new stories every 10 minutes. It then merges the results with those of the previous run, dedupes, and stores again.
+- The second runs 2 minutes after the first, computes hot stories from new ones, by simulating HN's score algorithm, and stores that on the KV.
+- The last runs every 6 hours and computes the best stories (historically, ordered by points), and stores. 
+
+Each trigger stores 300 stories (10 pages of results).
+
+(A previous, simpler, version queried for new 600 results every 10 minutes for both new and best, and computed hot, all under the same cron trigger; but that exceeded CloudFlare's free limit of 10ms of CPU time; and I want to keep this free).
 
 The Svelte 5 frontend is a static site that just queries the worker and displays the (paginated) results.
 
@@ -23,12 +32,7 @@ cd frontend
 npm run dev
 ```
 
-**NOTE:** To use Vite's dev server (`npm run dev` from above), flip the
-`DEBUG` constant to `true` in index.js.
-To use a local worker for the api instead of the remote one, flip the `LOCAL` const in api.js to `true`. 
-To use a local db instead of the remote one, comment out `remote: true` in wrangler.jsonc.
-
-At some point, I really need to change all this to env vars. 
+**NOTE:** The dev server uses the remote db. To use a local db instead of the remote one, comment out `remote: true` in wrangler.jsonc.
 
 ---
 
@@ -37,20 +41,18 @@ To deploy the changes:
 From the frontend dir: `npm run build`. This will generate the static assets in `worker/public`. 
 After that, from worker, run `npm run deploy`. 
 
-**NOTE:** Make sure that all `DEBUG`, `LOCAL`, etc. constants are set to false before deploying (see above).
-
 ---
 
 To get the stories from HN, I'm querying the following two endpoints:
 
 Ordered by date (new):
 ```bash
-curl "https://hn.algolia.com/api/v1/search_by_date?tags=story&restrictSearchableAttributes=url&query=substack.com&hitsPerPage=600" -o new.json
+curl "https://hn.algolia.com/api/v1/search_by_date?tags=story&restrictSearchableAttributes=url&query=substack.com&hitsPerPage=300&numericFilters=created_at_i>[[TIMESTAMP]]"
 ```
 
 Ordered by points (best):
 ```bash
-curl "https://hn.algolia.com/api/v1/search?tags=story&restrictSearchableAttributes=url&query=substack.com&hitsPerPage=600" -o stories.json
+curl "https://hn.algolia.com/api/v1/search?tags=story&restrictSearchableAttributes=url&query=substack.com&hitsPerPage=300"
 ```
 
 Trending stories (hot) are reconstructed from new by computing (an approximation) of the HN score in the worker, with the algorithm:
@@ -94,6 +96,6 @@ hnsubstacks/
 
 ## Contributing
 
-Please submit any issues you find via GitHub's Isses page. 
+Please submit any issues you find via GitHub's Issues page. 
 
 **This is a side project** that I made over a weekend. Although I will fix issues and keep maintaining it, I'm not going to be able to dedicate a lot of time to it, so I'm not planning on adding new features. If there's something that you feel would really benefit this site, please discuss it in Issues before getting to work and making a pull request.

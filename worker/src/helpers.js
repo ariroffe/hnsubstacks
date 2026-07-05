@@ -1,6 +1,6 @@
 // ----- for fetch and store -----
 
-export function buildAlgoliaEndpoint(searchType, domain, hitsPerPage) {
+export function buildAlgoliaEndpoint(searchType, domain, hitsPerPage, sinceTimestamp = null) {
   // Return value is something like: 
   // "https://hn.algolia.com/api/v1/search?tags=story&restrictSearchableAttributes=url&query=substack.com&hitsPerPage=300"
   const queryParams = new URLSearchParams({
@@ -9,6 +9,9 @@ export function buildAlgoliaEndpoint(searchType, domain, hitsPerPage) {
     query: domain,
     hitsPerPage: String(hitsPerPage),
   });
+  if (sinceTimestamp !== null) {
+    queryParams.set("numericFilters", `created_at_i>${sinceTimestamp}`);
+  }
   return `https://hn.algolia.com/api/v1/${searchType}?${queryParams}`
 }
 
