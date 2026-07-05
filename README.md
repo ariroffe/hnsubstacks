@@ -21,7 +21,7 @@ cd frontend
 npm run dev
 ```
 
-NOTE: To use Vite's dev server (`npm run dev` from above), flip the
+**NOTE:** To use Vite's dev server (`npm run dev` from above), flip the
 `DEBUG` constant to `true` in index.js.
 To use a local worker for the api instead of the remote one, flip the `LOCAL` const in api.js to `true`. 
 To use a local db instead of the remote one, comment out `remote: true` in wrangler.jsonc.
@@ -32,11 +32,10 @@ At some point, I really need to change all this to env vars.
 
 To deploy the changes:
 
-From the frontend dir: `npm run build`. This will generate the
-static assets in `worker/public`. 
+From the frontend dir: `npm run build`. This will generate the static assets in `worker/public`. 
 After that, from worker, run `npm run deploy`. 
 
-NOTE: Make sure that all `DEBUG`, `LOCAL`, etc. constants are set to false before deploying (see above).
+**NOTE:** Make sure that all `DEBUG`, `LOCAL`, etc. constants are set to false before deploying (see above).
 
 ---
 
