@@ -18,9 +18,9 @@ I use [HN's Algolia API](https://hn.algolia.com/api) to fetch substack stories b
 I do this via a CloudFlare worker that has 3 separate cron triggers:
 - The first fetches new stories every 10 minutes. It then merges the results with those of the previous run, dedupes, and stores again.
 - The second runs 2 minutes after the first, computes hot stories from new ones, by simulating HN's score algorithm, and stores that on the KV.
-- The last runs every 6 hours and computes the best stories (historically, ordered by points), and stores. 
+- The last runs every 6 hours and computes the best stories (historically, ordered by points), and stores. Incremental version is paginated (fetches a page, merges, dedupes, and stores). 
 
-Each trigger stores 300 stories (10 pages of results).
+I store 300 new stories (10 pages of results) and 900 best (30 pages).
 
 (A previous, simpler, version queried for new 600 results every 10 minutes for both new and best, and computed hot, all under the same cron trigger; but that exceeded CloudFlare's free limit of 10ms of CPU time; and I want to keep this free).
 

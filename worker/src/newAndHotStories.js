@@ -1,4 +1,4 @@
-import { BASE_NUM_RESULTS } from "./config.js";
+import { NEW_STORIES_SAVED, NEW_STORIES_PER_CUSTOM_DOMAIN } from "./config.js";
 import {
   buildAlgoliaEndpoint,
   getApprovedDomains,
@@ -24,10 +24,12 @@ export async function fetchAndStoreNew(env) {
   return fetchAndStoreNewIncremental(env, prev.hits, sinceTimestamp);
 }
 
+// -------------------------------------------
+
 // Full version: fetch from scratch (for hard refreshes)
 export async function fetchAndStoreNewFull(env) {
   // Fetch from Algolia
-  const newRes = await fetch(buildAlgoliaEndpoint("search_by_date", "substack.com", BASE_NUM_RESULTS));
+  const newRes = await fetch(buildAlgoliaEndpoint("search_by_date", "substack.com", NEW_STORIES_SAVED));
   if (!newRes.ok) {
     throw new Error(`Algolia fetch failed: new=${newRes.status}`);
   }
@@ -42,13 +44,12 @@ export async function fetchAndStoreNewFull(env) {
 
   const domains = await getApprovedDomains(env);
   const newDomainHits = await fetchWithConcurrency(domains, (domain) =>
-    // Unlikely that there are more than 10 new items from the same custom domain
-    fetchCustomDomainHits("search_by_date", domain, 10)
+    fetchCustomDomainHits("search_by_date", domain, NEW_STORIES_PER_CUSTOM_DOMAIN)
   );
 
   const newFullHits = [...newBaseHits, ...newDomainHits]
     .sort((a, b) => b.created_at_i - a.created_at_i)
-    .slice(0, BASE_NUM_RESULTS);
+    .slice(0, NEW_STORIES_SAVED);
 
   await env.HNSUBSTACKS_KV.put("stories:new", payload(newFullHits), {
     expirationTtl: 3600,
@@ -57,10 +58,12 @@ export async function fetchAndStoreNewFull(env) {
   return newFullHits;
 }
 
+// -------------------------------------------
+
 // Incremental version: fetch new stories since the last timestamp
 async function fetchAndStoreNewIncremental(env, prevHits, sinceTimestamp) {
   // Fetch from Algolia, only items newer than the last stored update
-  const newEndpoint = `${buildAlgoliaEndpoint("search_by_date", "substack.com", BASE_NUM_RESULTS, sinceTimestamp)}`;
+  const newEndpoint = `${buildAlgoliaEndpoint("search_by_date", "substack.com", NEW_STORIES_SAVED, sinceTimestamp)}`;
   const newRes = await fetch(newEndpoint);
   if (!newRes.ok) {
     throw new Error(`Algolia fetch failed: new=${newRes.status}`);
@@ -76,8 +79,7 @@ async function fetchAndStoreNewIncremental(env, prevHits, sinceTimestamp) {
 
   const domains = await getApprovedDomains(env);
   const newDomainHits = await fetchWithConcurrency(domains, (domain) =>
-    // Unlikely that there are more than 10 new items from the same custom domain
-    fetchCustomDomainHits("search_by_date", domain, 10, sinceTimestamp)
+    fetchCustomDomainHits("search_by_date", domain, NEW_STORIES_PER_CUSTOM_DOMAIN, sinceTimestamp)
   );
   
   // Merge fresh hits (domain + base) with previous hits, keeping the freshest
@@ -91,7 +93,7 @@ async function fetchAndStoreNewIncremental(env, prevHits, sinceTimestamp) {
       return true;
     })
     .sort((a, b) => b.created_at_i - a.created_at_i)
-    .slice(0, BASE_NUM_RESULTS);
+    .slice(0, NEW_STORIES_SAVED);
 
   await env.HNSUBSTACKS_KV.put("stories:new", payload(newFullHits), {
     expirationTtl: 3600,

@@ -1,5 +1,5 @@
 import { fetchAndStoreNew, fetchAndStoreNewFull, computeAndStoreHot } from "./newAndHotStories.js";
-import { fetchAndStoreBest } from "./bestStories.js";
+import { fetchAndStoreBest, fetchAndStoreBestFull } from "./bestStories.js";
 import { handleDomainRequest, handleFlagDomain } from "./postHandlers.js";
 
 // --- hard refresh of all stories ---
@@ -7,7 +7,7 @@ import { handleDomainRequest, handleFlagDomain } from "./postHandlers.js";
 async function fetchAndStoreAll(env) {
   const [newFullHits] = await Promise.all([
     fetchAndStoreNewFull(env),
-    fetchAndStoreBest(env),
+    fetchAndStoreBestFull(env),
   ]);
   await computeAndStoreHot(env, newFullHits);
 }
@@ -72,11 +72,11 @@ export default {
   async scheduled(event, env, ctx) {
     // I'm separating the refresh of the new / best / hot stores into 3 cron 
     // triggers bc otherwise we sometimes hit CFs free 10ms of cpu time
-    if (event.cron === "*/10 * * * *") {
+    if (event.cron === "*/10 * * * *") {            // New stories, every 10 mins
       ctx.waitUntil(fetchAndStoreNew(env));
-    } else if (event.cron === "2-59/10 * * * *") {
+    } else if (event.cron === "2-59/10 * * * *") {  // Hot stories, 2 mins after new
       ctx.waitUntil(computeAndStoreHot(env));
-    } else if (event.cron === "0 */6 * * *") {
+    } else if (event.cron === "0 * * * *") {        // Best stories, every 1 hour
       ctx.waitUntil(fetchAndStoreBest(env));
     }
   },

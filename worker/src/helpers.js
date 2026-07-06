@@ -2,9 +2,13 @@ import { DOMAIN_REGEX } from "./config.js";
 
 // ----- for fetch and store -----
 
-export function buildAlgoliaEndpoint(searchType, domain, hitsPerPage, sinceTimestamp = null) {
+export function buildAlgoliaEndpoint(searchType, domain, hitsPerPage, sinceTimestamp = null, minPoints = null, page = null) {
   // Return value is something like: 
   // "https://hn.algolia.com/api/v1/search?tags=story&restrictSearchableAttributes=url&query=substack.com&hitsPerPage=300"
+  if (sinceTimestamp !== null && minPoints !== null) {
+    throw new Error("sinceTimestamp and minPoints cannot both be set at the same time");
+  }
+  
   const queryParams = new URLSearchParams({
     tags: "story",
     restrictSearchableAttributes: "url",
@@ -13,6 +17,14 @@ export function buildAlgoliaEndpoint(searchType, domain, hitsPerPage, sinceTimes
   });
   if (sinceTimestamp !== null) {
     queryParams.set("numericFilters", `created_at_i>${sinceTimestamp}`);
+  }
+  if (minPoints !== null) {
+    // POINTS NUMERIC FILTER DOESN'T SEEM TO BE WORKING, DESPITE WHAT THE DOCS SAY
+    // If they ever fix this, re-enable this
+    // queryParams.set("numericFilters", `points>=${minPoints}`);
+  }
+  if (page !== null) {
+    queryParams.set("page", String(page));
   }
   return `https://hn.algolia.com/api/v1/${searchType}?${queryParams}`
 }
@@ -25,17 +37,17 @@ export async function getApprovedDomains(env) {
   return results.map((r) => r.domain);
 }
 
-export async function fetchCustomDomainHits(searchType, domain, hitsPerPage, sinceTimestamp = null) {
+export async function fetchCustomDomainHits(searchType, domain, hitsPerPage, sinceTimestamp = null, minPoints = null) {
   // Fetches the result for a single domain and search type (either "search" or "search_by_date").
   // Note: on failure continues on to the next custom domain, does not break the entire process
   try {
     // domains are saved without protocol in the db, add it in the endpoint
-    const res = await fetch(buildAlgoliaEndpoint(searchType, `https://${domain}`, hitsPerPage, sinceTimestamp));
+    const res = await fetch(buildAlgoliaEndpoint(searchType, `https://${domain}`, hitsPerPage, sinceTimestamp, minPoints));
     if (!res.ok) throw new Error(`status ${res.status}`);
     let data = await res.json();
     // query="..." is fuzzy text match, not an exact filter, so enforce hostname match, 
     // (allowing subdomains of the approved domain? Only for www.
-    const filtered = [];
+    let filtered = [];
     for (const h of data.hits) {
       if (!h.url) continue;
       const hostname = getHostnameFast(h.url);
