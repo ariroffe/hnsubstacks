@@ -1,15 +1,56 @@
 <script>
   import { submitDomain } from "./api";
-  const WORKER_URL = "https://your-worker.example.workers.dev"; // update me
- 
+  
   let domain = $state("");
   let submitting = $state(false);
   let result = $state(null); // { domain, status, message } | { error }
  
+  // --- validate input (done again in the backend) ---
+
+  const DOMAIN_DENYLIST = new Set(["substack.com", "www.substack.com", "hnsubstacks.com"]);
+  const DOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+  function normalizeDomain(input) {
+    if (typeof input !== "string") return null;
+    let d = input.trim().toLowerCase();
+    if (d.length === 0 || d.length > 253) return null;
+    if (!/^https?:\/\//.test(d)) d = "https://" + d;
+
+    let host;
+    try {
+        host = new URL(d).hostname;
+    } catch {
+        return null;
+    }
+
+    if (host.startsWith("www.")) host = host.slice(4);
+    if (!DOMAIN_REGEX.test(host)) return null;
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return null;
+
+    return host;
+  }
+
+  export function validateDomain(input) {
+    const normalized = normalizeDomain(input);
+    if (!normalized) return "That doesn't look like a valid domain.";
+    if (DOMAIN_DENYLIST.has(normalized) || normalized.endsWith(".substack.com")) {
+        return "That domain doesn't need to be submitted.";
+    }
+    return null;
+  }
+
+  // --- submit ---
+  
   async function submit(ev) {
     ev.preventDefault();
     result = null;
-    if (!domain.trim()) return;
+
+    const validation = validateDomain(domain)
+    if (validation !== null) {
+      result = { status: "rejected", message: validation }
+      return;
+    }
+
     submitting = true;
     
     result = await submitDomain(domain);
@@ -36,13 +77,11 @@
   </div>
 
   {#if result?.error}
-    <br>
     <p class="error">{result.error}</p>
   {:else if result}
-    <br>
     <p class="status status-{result.status}">
-        {{ approved: "✅", rejected: "❌", pending: "⏳" }[result.status] || ""}
-        {result.message}
+      {({ approved: "✅", rejected: "❌", pending: "⏳" }[result.status]) || ""}
+      {result.message}
     </p>
   {/if}
 </form>
