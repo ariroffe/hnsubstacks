@@ -4,59 +4,6 @@ import { DOMAIN_DENYLIST, IP_HOURLY_LIMIT } from "./config.js";
 
 // ---------- custom domain submission ----------
  
-// Best-effort automatic check that a domain is actually a Substack.
-// Two independent signals:
-// - the RSS feed's <generator> tag
-// - Substack CDN asset references on the homepage. 
-// Either one is treated as sufficient; if both checks
-// fail or error out, the domain falls back to manual review.
-async function validateSubstackDomain(domain) {
-  const notes = [];
-  let isSubstack = false;
- 
-  try {
-    const feedRes = await fetchWithTimeout(`https://${domain}/feed`, 5000);
-    if (feedRes.ok) {
-      const feedText = (await feedRes.text()).slice(0, 20000);
-      if (/<generator>\s*Substack\s*<\/generator>/i.test(feedText) || /cdn\.substack\.com/i.test(feedText)) {
-        isSubstack = true;
-        notes.push("feed:generator_substack");
-      } else {
-        notes.push("feed:ok_no_match");
-      }
-    } else {
-      notes.push(`feed:http_${feedRes.status}`);
-    }
-  } catch (e) {
-    notes.push(`feed:error_${e.name}`);
-  }
- 
-  if (!isSubstack) {
-    try {
-      const homeRes = await fetchWithTimeout(`https://${domain}/`, 5000);
-      if (homeRes.ok) {
-        const html = (await homeRes.text()).slice(0, 50000);
-        if (
-          /substackcdn\.com/i.test(html) ||
-          /content=["']Substack["']/i.test(html) ||
-          /substack\.com\/app-link/i.test(html)
-        ) {
-          isSubstack = true;
-          notes.push("homepage:substack_markers");
-        } else {
-          notes.push("homepage:ok_no_match");
-        }
-      } else {
-        notes.push(`homepage:http_${homeRes.status}`);
-      }
-    } catch (e) {
-      notes.push(`homepage:error_${e.name}`);
-    }
-  }
- 
-  return { isSubstack, notes: notes.join("; ") };
-}
- 
 export async function handleDomainRequest(request, env) {
   // For dev mode
   const DEBUG = env.DEBUG === "true";
@@ -135,6 +82,59 @@ export async function handleDomainRequest(request, env) {
       ? "Verified automatically and added."
       : "Could not auto-verify; queued for manual review.",
   }, 201, CORS_HEADERS);
+}
+
+// Best-effort automatic check that a domain is actually a Substack.
+// Two independent signals:
+// - the RSS feed's <generator> tag
+// - Substack CDN asset references on the homepage. 
+// Either one is treated as sufficient; if both checks
+// fail or error out, the domain falls back to manual review.
+async function validateSubstackDomain(domain) {
+  const notes = [];
+  let isSubstack = false;
+ 
+  try {
+    const feedRes = await fetchWithTimeout(`https://${domain}/feed`, 5000);
+    if (feedRes.ok) {
+      const feedText = (await feedRes.text()).slice(0, 20000);
+      if (/<generator>\s*Substack\s*<\/generator>/i.test(feedText) || /cdn\.substack\.com/i.test(feedText)) {
+        isSubstack = true;
+        notes.push("feed:generator_substack");
+      } else {
+        notes.push("feed:ok_no_match");
+      }
+    } else {
+      notes.push(`feed:http_${feedRes.status}`);
+    }
+  } catch (e) {
+    notes.push(`feed:error_${e.name}`);
+  }
+ 
+  if (!isSubstack) {
+    try {
+      const homeRes = await fetchWithTimeout(`https://${domain}/`, 5000);
+      if (homeRes.ok) {
+        const html = (await homeRes.text()).slice(0, 50000);
+        if (
+          /substackcdn\.com/i.test(html) ||
+          /content=["']Substack["']/i.test(html) ||
+          /substack\.com\/app-link/i.test(html)
+        ) {
+          isSubstack = true;
+          notes.push("homepage:substack_markers");
+        } else {
+          notes.push("homepage:ok_no_match");
+        }
+      } else {
+        notes.push(`homepage:http_${homeRes.status}`);
+      }
+    } catch (e) {
+      notes.push(`homepage:error_${e.name}`);
+    }
+  }
+ 
+  return { isSubstack, notes: notes.join("; ") };
 }
 
 // ---------- flag custom domains ----------

@@ -32,14 +32,12 @@ cd frontend
 npm run dev
 ```
 
+```bash
+cd worker
+npm run dev
+```
+
 **NOTE:** The dev server uses the remote db. To use a local db instead of the remote one, comment out `remote: true` in wrangler.jsonc.
-
----
-
-To deploy the changes:
-
-From the frontend dir: `npm run build`. This will generate the static assets in `worker/public`. 
-After that, from worker, run `npm run deploy`. 
 
 ---
 
@@ -67,6 +65,18 @@ To refresh the KV store locally (only in DEBUG mode):
 curl "http://localhost:8787/api/refresh"
 ```
 
+## Deploying
+
+```bash
+cd frontend
+npm run dev
+```
+
+```bash
+cd worker
+npm run deploy
+```
+
 ## Structure
 ```
 
@@ -90,8 +100,12 @@ hnsubstacks/
     │   └── cheatsheet.txt        Frequently run SQL commands
     ├── public/                   Built frontend static assets (output of npm run build)
     └── src/
-        ├── helpers.js            Helper functions for index.js
-        └── index.js              Worker entrypoint — API routes, cron, fetch/store logic
+        ├── config.js             Configuration variables for the entire backend
+        ├── helpers.js            Helper functions
+        ├── newAndHotStories.js   Fetch and store new/hot stories
+        ├── bestStories.js        Fetch and store best stories
+        ├── postHandlers.js       Custom domain submission and url flagging
+        └── index.js              Worker entrypoint — API routes, cron
 ```
 
 ## Contributing

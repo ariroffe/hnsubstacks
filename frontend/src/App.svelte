@@ -194,9 +194,8 @@
   input#search-box {
     font-size: 10pt;
     padding: 2px 4px;
-    border: 1px solid #6EE7B7;
+    border: 1px solid #999;
     border-radius: 2px;
-    width: 180px;
     height: 19px;
     width: 140px;
     padding: 0 5px;

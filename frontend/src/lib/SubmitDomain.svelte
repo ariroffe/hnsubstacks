@@ -20,17 +20,20 @@
 
 <form onsubmit={submit}>
   Custom domain? Request addition:<br>
-  <input type="text" 
-         id="domain" 
-         size="17" 
-         autocorrect="off" spellcheck="false" autocapitalize="off" autocomplete="off"     
-         bind:value={domain}
-         disabled={submitting}
-  />
+  <div class="flex">
+    <input type="text" 
+            id="domain" 
+            size="17"
+            placeholder="blog.mydomain.com"
+            autocorrect="off" spellcheck="false" autocapitalize="off" autocomplete="off"     
+            bind:value={domain}
+            disabled={submitting}
+    />
 
-  <button type="submit" disabled={submitting || !domain.trim()}>
-    {submitting ? "Checking…" : "Submit"}
-  </button>
+    <button id="submit" type="submit" disabled={submitting || !domain.trim()}>
+        {submitting ? "Checking…" : "Submit"}
+    </button>
+  </div>
 
   {#if result?.error}
     <br>
@@ -55,5 +58,25 @@
   }
   p.status-approved {
     color: green;
+  }
+  div.flex {
+    display: flex; 
+    gap: 5px; 
+    justify-content:center; 
+    width: fit-content;
+  }
+  input#domain {
+    font-size: 9pt;
+    padding: 2px 4px;
+    border: 1px solid #6EE7B7;
+    border-radius: 2px;
+    height: 23px;
+    width: 200px;
+    padding: 0 5px;
+    text-align: center;
+  }
+  button#submit {
+    height: 23px;
+    padding: 0 5px;
   }
 </style>
