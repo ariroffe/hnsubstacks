@@ -42,7 +42,7 @@ npm run dev
 
 Then navigate to http://localhost:5173/
 
-**NOTE:** The dev server uses the remote db. To use a local db instead of the remote one, comment out `remote: true` in wrangler.jsonc.
+**NOTE:** The dev server uses the remote db. To use a local db instead of the remote one (which you'll need because your wrangler tool isn't logged in to my CloudFlare account), comment out `remote: true` in wrangler.jsonc.
 
 ---
 
