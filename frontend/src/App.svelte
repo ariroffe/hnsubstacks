@@ -165,7 +165,7 @@
             </table>
             <br>
             <center>
-              <span class="yclinks"><a target="_blank", href="#FIXME">About hnsubstacks</a> | <a target="_blank" href="https://github.com/ariroffe/hnsubstacks/">Repo</a> | <a
+              <span class="yclinks"><a target="_blank", href="https://news.ycombinator.com/item?id=48818416">About hnsubstacks</a> | <a target="_blank" href="https://github.com/ariroffe/hnsubstacks/">Repo</a> | <a
                   target="_blank" href="https://arielroffe.quest/">Author</a></span>
                   <br>
                   <br>
