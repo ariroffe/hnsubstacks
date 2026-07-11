@@ -1,4 +1,4 @@
-import { fetchAndStoreNew, fetchAndStoreNewFull, computeAndStoreHot } from "./newAndHotStories.js";
+import { fetchAndStoreNew, fetchAndStoreNewFull, updateNew, computeAndStoreHot } from "./newAndHotStories.js";
 import { fetchAndStoreBest, fetchAndStoreBestFull } from "./bestStories.js";
 import { handleDomainRequest, handleFlagDomain } from "./postHandlers.js";
 
@@ -78,6 +78,10 @@ export default {
       ctx.waitUntil(computeAndStoreHot(env));
     } else if (event.cron === "0 * * * *") {        // Best stories, every 1 hour
       ctx.waitUntil(fetchAndStoreBest(env));
+    } else if (event.cron === "5,35 * * * *") {     // Update points/comments for new, every 30 mins
+      ctx.waitUntil(updateNew(env));
+    } else if (event.cron === "7,37 * * * *") {     // Hot stories again, 2 mins after updateNew
+      ctx.waitUntil(computeAndStoreHot(env));
     }
   },
 };

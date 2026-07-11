@@ -15,9 +15,10 @@ Hacker News stories from Substack, ordered by score (trending), date or historic
 ## Strategy
 I use [HN's Algolia API](https://hn.algolia.com/api) to fetch substack stories by searching for "substack.com" in the url.
 
-I do this via a CloudFlare worker that has 3 separate cron triggers:
-- The first fetches new stories every 10 minutes. It then merges the results with those of the previous run, dedupes, and stores again.
-- The second runs 2 minutes after the first, computes hot stories from new ones, by simulating HN's score algorithm, and stores that on the KV.
+I do this via a CloudFlare worker that has 4 separate cron triggers:
+- The first fetches stories that are newer than those seen in the previous run. It does so every 10 minutes. It then merges the results with those of the previous runs, dedupes, and stores again.
+- The second updates the 90 top ranked (already stored) new stories, of the last 48hs. It does so every 30 mins. This is so that the stories outside the latest 10 min window have accurate points for the computation of hot stories.
+- The third runs 2 minutes after the first and 2 minutes after the second. It computes hot stories from new ones, by simulating HN's score algorithm, and stores that on the KV.
 - The last runs once every hour and computes the best stories (historically, ordered by points). Incremental version is paginated (fetches a page, merges, dedupes, and stores). 
 
 I store 300 new stories (10 pages of results) and 900 best (30 pages).

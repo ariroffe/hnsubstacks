@@ -1,4 +1,9 @@
-import { NEW_STORIES_SAVED, NEW_STORIES_PER_CUSTOM_DOMAIN } from "./config.js";
+import { 
+  NEW_STORIES_SAVED, 
+  NEW_STORIES_PER_CUSTOM_DOMAIN,
+  NEW_UPDATE_BATCH_SIZE,
+  NEW_UPDATE_BATCH_SIZE_PER_DOMAIN,
+} from "./config.js";
 import {
   buildAlgoliaEndpoint,
   getApprovedDomains,
@@ -6,7 +11,7 @@ import {
   fetchCustomDomainHits,
   slimHit,
   isSubstackHostname,
-  payload
+  payload,
 } from "./helpers.js"; 
 
 
@@ -58,7 +63,7 @@ export async function fetchAndStoreNewFull(env) {
   return newFullHits;
 }
 
-// -------------------------------------------
+// ------------------------------------------- 
 
 // Incremental version: fetch new stories since the last timestamp
 async function fetchAndStoreNewIncremental(env, prevHits, sinceTimestamp) {
@@ -101,6 +106,55 @@ async function fetchAndStoreNewIncremental(env, prevHits, sinceTimestamp) {
   return newFullHits;
 }
 
+
+// ------------------------------------------- 
+// Update new stories
+
+// Bc the previous trigger only fetches new stories since the last timestamp (i.e., last 10 mins), stories
+// that are older than 10 mins are never updated (their points especially). This is a problem for the
+// computation of hot stories. This one queries by points every half hour, since the last 48hs
+export async function updateNew(env) {
+  const sinceTimestamp = Math.floor(Date.now() / 1000) - 48 * 3600;
+
+  const updateRes = await fetch(
+    buildAlgoliaEndpoint("search", "substack.com", NEW_UPDATE_BATCH_SIZE, sinceTimestamp)
+  );
+  if (!updateRes.ok) {
+    throw new Error(`Algolia fetch failed: updateNew=${updateRes.status}`);
+  }
+  const updatedBaseHits = await updateRes.json().then(n => {
+    const out = [];
+    for (const h of n.hits) {
+      if (h.url && isSubstackHostname(h.url) && (h.points > 1 || h.num_comments > 0)) {
+        out.push(slimHit(h));
+      }
+    }
+    return out;
+  });
+
+  const domains = await getApprovedDomains(env);
+  const updatedDomainHits = (await fetchWithConcurrency(domains, (domain) =>
+    fetchCustomDomainHits("search", domain, NEW_UPDATE_BATCH_SIZE_PER_DOMAIN, sinceTimestamp)
+  )).filter(h => h.points > 1 || h.num_comments > 0);
+
+  const updatedByID = new Map(
+    [...updatedBaseHits, ...updatedDomainHits].map(h => [h.objectID, h])
+  );
+
+  const prevRaw = await env.HNSUBSTACKS_KV.get("stories:new");
+  if (!prevRaw) return null;
+
+  const prev = JSON.parse(prevRaw);
+  const refreshedHits = prev.hits.map(h => updatedByID.get(h.objectID) || h);
+
+  await env.HNSUBSTACKS_KV.put("stories:new", payload(refreshedHits), {
+    expirationTtl: 3600,
+  });
+
+  return refreshedHits;
+}
+
+// ------------------------------------------- 
 // --- hot stories ---
 
 function hnScore(points, createdAtUnix, now) {

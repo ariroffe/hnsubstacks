@@ -2,6 +2,11 @@
 export const NEW_STORIES_SAVED = 300;
 export const NEW_STORIES_PER_CUSTOM_DOMAIN = 10;  // unlikely to be many for a single custom domain in new
 
+// How many to update every 30 mins
+export const NEW_UPDATE_BATCH_SIZE = 90
+export const NEW_UPDATE_BATCH_SIZE_PER_DOMAIN = 5
+
+// Best stories
 export const BEST_STORIES_SAVED = 900;
 export const BEST_STORIES_PER_CUSTOM_DOMAIN = 30;  // there could be more in best
 export const BEST_NUM_PAGES = 10;  // Should be a divisor of the two numbers above
